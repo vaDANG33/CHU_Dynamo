@@ -1,0 +1,672 @@
+{
+  "Uuid": "0a45910c-7f44-49e5-a72f-ab6250ff663b",
+  "IsCustomNode": false,
+  "Description": "",
+  "Name": "SDP_RVT",
+  "ElementResolver": {
+    "ResolutionMap": {
+      "Document.Current": {
+        "Key": "Revit.Application.Document",
+        "Value": "RevitNodes.dll"
+      },
+      "String": {
+        "Key": "DSCore.String",
+        "Value": "DSCoreNodes.dll"
+      },
+      "Revit.Document.Current": {
+        "Key": "Revit.Application.Document",
+        "Value": "RevitNodes.dll"
+      },
+      "Revit.Document": {
+        "Key": "Revit.Application.Document",
+        "Value": "RevitNodes.dll"
+      },
+      "Revit.Application.Document.Current": {
+        "Key": "Revit.Application.Document",
+        "Value": "RevitNodes.dll"
+      },
+      "Revit.Elements.Views.FloorPlanView": {
+        "Key": "Revit.Elements.Views.FloorPlanView",
+        "Value": "RevitNodes.dll"
+      },
+      "Autodesk.DesignScript.Geometry.Curve": {
+        "Key": "Autodesk.DesignScript.Geometry.Curve",
+        "Value": "ProtoGeometry.dll"
+      }
+    }
+  },
+  "Inputs": [
+    {
+      "Id": "569f771ba17e4acea02e7666a29e5bfd",
+      "Name": "1.Plan DWG",
+      "Type": "selection",
+      "Type2": "hostSelection",
+      "Value": "553e9f07-641a-49fe-a194-c123bb074891-0037b974",
+      "Description": "Sélectionner un élément de modèle dans le document.",
+      "SelectedIndex": 0
+    },
+    {
+      "Id": "51bf6ad1206b43faab106b3db611be3e",
+      "Name": "3.Niveau",
+      "Type": "selection",
+      "Type2": "dropdownSelection",
+      "Value": "S2",
+      "Description": "Sélectionner un niveau dans le document actif",
+      "SelectedIndex": 13
+    },
+    {
+      "Id": "7d3ed75875cb44718aee32f2e1eb01bd",
+      "Name": "2.Calque SDP",
+      "Type": "string",
+      "Type2": "string",
+      "Value": "Surface_Plancher",
+      "Description": "Crée une chaîne.",
+      "SelectedIndex": 0
+    }
+  ],
+  "Outputs": [],
+  "Nodes": [
+    {
+      "ConcreteType": "Dynamo.Nodes.DSModelElementSelection, DSRevitNodesUI",
+      "NodeType": "ExtensionNode",
+      "InstanceId": [
+        "553e9f07-641a-49fe-a194-c123bb074891-0037b974"
+      ],
+      "Id": "569f771ba17e4acea02e7666a29e5bfd",
+      "Inputs": [],
+      "Outputs": [
+        {
+          "Id": "eadfeba577c74ff09d34528dac9d0117",
+          "Name": "Element",
+          "Description": "Eléments sélectionnés.",
+          "UsingDefaultValue": false,
+          "Level": 2,
+          "UseLevels": false,
+          "KeepListStructure": false
+        }
+      ],
+      "Replication": "Disabled"
+    },
+    {
+      "ConcreteType": "DSRevitNodesUI.Levels, DSRevitNodesUI",
+      "SelectedIndex": 13,
+      "SelectedString": "S2",
+      "NodeType": "ExtensionNode",
+      "Id": "51bf6ad1206b43faab106b3db611be3e",
+      "Inputs": [],
+      "Outputs": [
+        {
+          "Id": "5da309ba7e0a423e815fb623357eca92",
+          "Name": "Levels",
+          "Description": "Levels sélectionné",
+          "UsingDefaultValue": false,
+          "Level": 2,
+          "UseLevels": false,
+          "KeepListStructure": false
+        }
+      ],
+      "Replication": "Disabled",
+      "Description": "Sélectionner un niveau dans le document actif"
+    },
+    {
+      "ConcreteType": "CoreNodeModels.Input.StringInput, CoreNodeModels",
+      "NodeType": "StringInputNode",
+      "InputValue": "Surface_Plancher",
+      "Id": "7d3ed75875cb44718aee32f2e1eb01bd",
+      "Inputs": [],
+      "Outputs": [
+        {
+          "Id": "f1be43f2016f49f7911b3c50cdbaf849",
+          "Name": "",
+          "Description": "String",
+          "UsingDefaultValue": false,
+          "Level": 2,
+          "UseLevels": false,
+          "KeepListStructure": false
+        }
+      ],
+      "Replication": "Disabled",
+      "Description": "Crée une chaîne."
+    },
+    {
+      "ConcreteType": "Dynamo.Graph.Nodes.ZeroTouch.DSFunction, DynamoCore",
+      "NodeType": "FunctionNode",
+      "FunctionSignature": "CAD.CurvesFromCADLayers@Revit.Elements.ImportInstance,string[],bool,string[]",
+      "Id": "82554ef68e3c432aa8fc0ec3f24d6621",
+      "Inputs": [
+        {
+          "Id": "50c193750b0b4c269e2b906f5dd058fe",
+          "Name": "importInstance",
+          "Description": "Input the ImportInstance to convert to curves.\n\nImportInstance",
+          "UsingDefaultValue": false,
+          "Level": 2,
+          "UseLevels": false,
+          "KeepListStructure": false
+        },
+        {
+          "Id": "3ba8580b8b1c48b59ebf184a76deaa8a",
+          "Name": "layerNames",
+          "Description": "Input the layer names for conversion. Leave unconnected to convert all layers. Names are case-sensitive.\n\nstring[]\nValeur par défaut : []",
+          "UsingDefaultValue": true,
+          "Level": 2,
+          "UseLevels": false,
+          "KeepListStructure": false
+        },
+        {
+          "Id": "c4455a3c596e4844ae71f1436ce6cdca",
+          "Name": "createModelCurves",
+          "Description": "Set to True to convert into Revit Model Lines.\n\nbool\nValeur par défaut : false",
+          "UsingDefaultValue": true,
+          "Level": 2,
+          "UseLevels": false,
+          "KeepListStructure": false
+        },
+        {
+          "Id": "d5ca950f08e648cb881d451cea15ae02",
+          "Name": "lineStyleMap",
+          "Description": "Input the LineStyle name to map to each layer. Longest lacing is used by default.\n\nstring[]\nValeur par défaut : []",
+          "UsingDefaultValue": true,
+          "Level": 2,
+          "UseLevels": false,
+          "KeepListStructure": false
+        }
+      ],
+      "Outputs": [
+        {
+          "Id": "c33fed02e1c44d6d9c83c53a6c97b11a",
+          "Name": "Curve[][]",
+          "Description": "Curve[][]",
+          "UsingDefaultValue": false,
+          "Level": 2,
+          "UseLevels": false,
+          "KeepListStructure": false
+        },
+        {
+          "Id": "6ac16ee534524cf0928f303ce5a3bc7d",
+          "Name": "layerKeys[]",
+          "Description": "var",
+          "UsingDefaultValue": false,
+          "Level": 2,
+          "UseLevels": false,
+          "KeepListStructure": false
+        }
+      ],
+      "Replication": "Auto",
+      "Description": "Extracts curves from a CAD link or import by layer name. Enter LineStyle names to map to each layer during conversion.\r\rThe node is optimized to convert curve types that typically fail when using Dynamo Element.Curves node or Revit Explode.\r\rVisit bimorph.com/bimorph-nodes for support.\n\nCAD.CurvesFromCADLayers (importInstance: ImportInstance, layerNames: string[] = [], createModelCurves: bool = false, lineStyleMap: string[] = []): var[]..[]"
+    },
+    {
+      "ConcreteType": "Dynamo.Graph.Nodes.ZeroTouch.DSFunction, DynamoCore",
+      "NodeType": "FunctionNode",
+      "FunctionSignature": "DSCore.List.Flatten@var[]..[],int",
+      "Id": "29dbe8d411424f4294df7691a6a321a9",
+      "Inputs": [
+        {
+          "Id": "443c3079b67a46c088dfdec63fba02f0",
+          "Name": "list",
+          "Description": "Liste à aplanir.\n\nvar[]..[]",
+          "UsingDefaultValue": false,
+          "Level": 2,
+          "UseLevels": false,
+          "KeepListStructure": false
+        },
+        {
+          "Id": "a046584e4efd4aaa8d60ba782adfbb1f",
+          "Name": "amount",
+          "Description": "Couches d'imbrication de liste à supprimer (-1 pour supprimer toutes les imbrications de liste)\n\nint\nValeur par défaut : -1",
+          "UsingDefaultValue": true,
+          "Level": 2,
+          "UseLevels": false,
+          "KeepListStructure": false
+        }
+      ],
+      "Outputs": [
+        {
+          "Id": "8b0fb4b9a1ac4efd9354052b7e218ae5",
+          "Name": "list",
+          "Description": "Liste aplanie selon la quantité",
+          "UsingDefaultValue": false,
+          "Level": 2,
+          "UseLevels": false,
+          "KeepListStructure": false
+        }
+      ],
+      "Replication": "Auto",
+      "Description": "Aplanit une liste imbriquée de listes en fonction d'une quantité spécifique.\n\nList.Flatten (list: var[]..[], amount: int = -1): var[]..[]"
+    },
+    {
+      "ConcreteType": "Dynamo.Graph.Nodes.CodeBlockNodeModel, DynamoCore",
+      "NodeType": "CodeBlockNode",
+      "Code": "Document.Current.ActiveView;",
+      "Id": "ebc0c0deba5f48fbb01022c14b4d9138",
+      "Inputs": [],
+      "Outputs": [
+        {
+          "Id": "4213800de1a049b1a01d50c775ad3649",
+          "Name": "",
+          "Description": "Valeur de l'expression à la ligne 1",
+          "UsingDefaultValue": false,
+          "Level": 2,
+          "UseLevels": false,
+          "KeepListStructure": false
+        }
+      ],
+      "Replication": "Disabled",
+      "Description": "Permet de créer le code DesignScript directement"
+    },
+    {
+      "ConcreteType": "Dynamo.Graph.Nodes.ZeroTouch.DSFunction, DynamoCore",
+      "NodeType": "FunctionNode",
+      "FunctionSignature": "Revit.Elements.Group.ByElements@Revit.Elements.Element[]",
+      "Id": "41e97a32713242b19bcb3ce050540d60",
+      "Inputs": [
+        {
+          "Id": "e83c61592e274affa7d862d6ed93835d",
+          "Name": "elements",
+          "Description": "Éléments Revit à regrouper.\n\nElement[]",
+          "UsingDefaultValue": false,
+          "Level": 2,
+          "UseLevels": false,
+          "KeepListStructure": false
+        }
+      ],
+      "Outputs": [
+        {
+          "Id": "22766952a9b24f10944cfc0720282ecc",
+          "Name": "Group",
+          "Description": "Nouveau type de groupe",
+          "UsingDefaultValue": false,
+          "Level": 2,
+          "UseLevels": false,
+          "KeepListStructure": false
+        }
+      ],
+      "Replication": "Auto",
+      "Description": "Crée un type de groupe, avec tous les éléments d'entrée.\n\nGroup.ByElements (elements: Element[]): Group"
+    },
+    {
+      "ConcreteType": "PythonNodeModels.PythonNode, PythonNodeModels",
+      "NodeType": "PythonScriptNode",
+      "Code": "import clr\r\nclr.AddReference('RevitAPI')\r\nfrom Autodesk.Revit.DB import *\r\n\r\nclr.AddReference(\"RevitNodes\")\r\nimport Revit\r\nclr.ImportExtensions(Revit.GeometryConversion)\r\n\r\nclr.AddReference(\"RevitServices\")\r\nimport RevitServices\r\nfrom RevitServices.Persistence import DocumentManager\r\nfrom RevitServices.Transactions import TransactionManager\r\n\r\ndoc = DocumentManager.Instance.CurrentDBDocument\r\ncurves = UnwrapElement(IN[0])\r\nareaView = UnwrapElement(IN[1])  # Doit être une ViewPlan de type Area\r\n\r\nTransactionManager.Instance.EnsureInTransaction(doc)\r\no = areaView.Origin\r\nn = areaView.ViewDirection\r\nif o and n: \r\n    sketchplane = SketchPlane.Create(doc, Plane.CreateByNormalAndOrigin(n, o))\r\n    doccreation = doc.Create\r\n    elementlist = list()\r\n    for curve in curves:\r\n        # NewAreaBoundaryLine crée une ligne à la fois (pas de CurveArray)\r\n        areaBoundary = doccreation.NewAreaBoundaryLine(sketchplane, curve.ToRevitType(), areaView)\r\n        elementlist.append(areaBoundary)\r\nelse: \r\n    elementlist = []\r\nTransactionManager.Instance.TransactionTaskDone()\r\n\r\nif isinstance(IN[0], list): OUT = elementlist\r\nelse: OUT = elementlist[0] if elementlist else None\r\n",
+      "Engine": "IronPython2",
+      "EngineName": "IronPython2",
+      "VariableInputPorts": true,
+      "Id": "095006edf92b4dc6b6418a7fa9b36a29",
+      "Inputs": [
+        {
+          "Id": "1943f448828945a09067df1defe2b0b3",
+          "Name": "IN[0]",
+          "Description": "Input #0",
+          "UsingDefaultValue": false,
+          "Level": 2,
+          "UseLevels": false,
+          "KeepListStructure": false
+        },
+        {
+          "Id": "f7718d31133b47e18593db912bfda1c1",
+          "Name": "IN[1]",
+          "Description": "Input #1",
+          "UsingDefaultValue": false,
+          "Level": 2,
+          "UseLevels": false,
+          "KeepListStructure": false
+        }
+      ],
+      "Outputs": [
+        {
+          "Id": "41fd96af6a3c4f86b53ff307fb23b5e9",
+          "Name": "OUT",
+          "Description": "Résultat du script Python",
+          "UsingDefaultValue": false,
+          "Level": 2,
+          "UseLevels": false,
+          "KeepListStructure": false
+        }
+      ],
+      "Replication": "Disabled",
+      "Description": "Exécute un script Python intégré."
+    },
+    {
+      "ConcreteType": "Dynamo.Graph.Nodes.ZeroTouch.DSFunction, DynamoCore",
+      "NodeType": "FunctionNode",
+      "FunctionSignature": "Autodesk.DesignScript.Geometry.Curve.PullOntoPlane@Autodesk.DesignScript.Geometry.Plane",
+      "Id": "7979718042554c69b1b07e5f25dd24e1",
+      "Inputs": [
+        {
+          "Id": "59315447e4ea4f6c8f82b1cc6f16d0ae",
+          "Name": "curve",
+          "Description": "Autodesk.DesignScript.Geometry.Curve",
+          "UsingDefaultValue": false,
+          "Level": 2,
+          "UseLevels": false,
+          "KeepListStructure": false
+        },
+        {
+          "Id": "d2620cb775c24accacfbc4b8b76e4ca0",
+          "Name": "plane",
+          "Description": "Le plan sur lequel tirer la courbe\n\nPlane",
+          "UsingDefaultValue": false,
+          "Level": 2,
+          "UseLevels": false,
+          "KeepListStructure": false
+        }
+      ],
+      "Outputs": [
+        {
+          "Id": "a9fd770f3aa2426aa64f13996f71e5e6",
+          "Name": "Curve",
+          "Description": "Une Curve sur le plan",
+          "UsingDefaultValue": false,
+          "Level": 2,
+          "UseLevels": false,
+          "KeepListStructure": false
+        }
+      ],
+      "Replication": "Auto",
+      "Description": "Créer une courbe en tirant sur le plan\n\nCurve.PullOntoPlane (plane: Plane): Curve"
+    },
+    {
+      "ConcreteType": "PythonNodeModels.PythonNode, PythonNodeModels",
+      "NodeType": "PythonScriptNode",
+      "Code": "#Alban de Chasteigner 2020\n#twitter : @geniusloci_bim\n#geniusloci.bim@gmail.com\n\nimport clr\nclr.AddReference('RevitAPI')\nimport Autodesk\nfrom Autodesk.Revit.DB import *\n\nclr.AddReference('RevitNodes')\nimport Revit\nclr.ImportExtensions(Revit.GeometryConversion)\n\nlevels = UnwrapElement(IN[0]) if isinstance(IN[0],list) else [UnwrapElement(IN[0])]\n\t\nplanes = []\nfor level in levels:\n\telev=level.ProjectElevation\n\tpoint=XYZ(0,0,elev)\n\tplanes.append(Plane.CreateByNormalAndOrigin(XYZ.BasisZ,point).ToPlane())\n\n\t\nif isinstance(IN[0], (list)): OUT = planes\nelse: OUT = planes[0]",
+      "Engine": "IronPython2",
+      "EngineName": "IronPython2",
+      "VariableInputPorts": true,
+      "Id": "fafea9df3aa247719f061147ae3d5cb4",
+      "Inputs": [
+        {
+          "Id": "602e18e9674a4288bad8cd899cb0e485",
+          "Name": "IN[0]",
+          "Description": "Input #0",
+          "UsingDefaultValue": false,
+          "Level": 2,
+          "UseLevels": false,
+          "KeepListStructure": false
+        }
+      ],
+      "Outputs": [
+        {
+          "Id": "97bf75a1c6de438894e207a396c18c5d",
+          "Name": "OUT",
+          "Description": "Résultat du script Python",
+          "UsingDefaultValue": false,
+          "Level": 2,
+          "UseLevels": false,
+          "KeepListStructure": false
+        }
+      ],
+      "Replication": "Disabled",
+      "Description": "Exécute un script Python intégré."
+    }
+  ],
+  "Connectors": [
+    {
+      "Start": "eadfeba577c74ff09d34528dac9d0117",
+      "End": "50c193750b0b4c269e2b906f5dd058fe",
+      "Id": "f71dc11ce4634303801032522ab1420b",
+      "IsHidden": "False"
+    },
+    {
+      "Start": "5da309ba7e0a423e815fb623357eca92",
+      "End": "602e18e9674a4288bad8cd899cb0e485",
+      "Id": "821b6cd157aa446092872d9d5d149b71",
+      "IsHidden": "False"
+    },
+    {
+      "Start": "f1be43f2016f49f7911b3c50cdbaf849",
+      "End": "3ba8580b8b1c48b59ebf184a76deaa8a",
+      "Id": "a13ebedd13a94ec2a36747a07bdb0855",
+      "IsHidden": "False"
+    },
+    {
+      "Start": "c33fed02e1c44d6d9c83c53a6c97b11a",
+      "End": "443c3079b67a46c088dfdec63fba02f0",
+      "Id": "b8d56e79802d4f4e888a7d00e8713078",
+      "IsHidden": "False"
+    },
+    {
+      "Start": "8b0fb4b9a1ac4efd9354052b7e218ae5",
+      "End": "59315447e4ea4f6c8f82b1cc6f16d0ae",
+      "Id": "1f1f768ffe1649129d24b77c27ec4859",
+      "IsHidden": "False"
+    },
+    {
+      "Start": "4213800de1a049b1a01d50c775ad3649",
+      "End": "f7718d31133b47e18593db912bfda1c1",
+      "Id": "2a32095de6034a0b8449fd5026eaaf13",
+      "IsHidden": "False"
+    },
+    {
+      "Start": "41fd96af6a3c4f86b53ff307fb23b5e9",
+      "End": "e83c61592e274affa7d862d6ed93835d",
+      "Id": "2309e45c417b4761a184e65643f965b7",
+      "IsHidden": "False"
+    },
+    {
+      "Start": "a9fd770f3aa2426aa64f13996f71e5e6",
+      "End": "1943f448828945a09067df1defe2b0b3",
+      "Id": "cf35a6dbfbf24a31aad35cc1f065d95d",
+      "IsHidden": "False"
+    },
+    {
+      "Start": "97bf75a1c6de438894e207a396c18c5d",
+      "End": "d2620cb775c24accacfbc4b8b76e4ca0",
+      "Id": "c1399a51e0814d4c86e185b2b2be2d02",
+      "IsHidden": "False"
+    }
+  ],
+  "Dependencies": [],
+  "NodeLibraryDependencies": [
+    {
+      "Name": "bimorphNodes",
+      "Version": "5.1.3",
+      "ReferenceType": "Package",
+      "Nodes": [
+        "82554ef68e3c432aa8fc0ec3f24d6621"
+      ]
+    }
+  ],
+  "Thumbnail": "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",
+  "GraphDocumentationURL": null,
+  "ExtensionWorkspaceData": [
+    {
+      "ExtensionGuid": "28992e1d-abb9-417f-8b1b-05e053bee670",
+      "Name": "Propriétés",
+      "Version": "2.16",
+      "Data": {}
+    },
+    {
+      "ExtensionGuid": "DFBD9CC0-DB40-457A-939E-8C8555555A9D",
+      "Name": "Generative Design",
+      "Version": "3.0",
+      "Data": {}
+    }
+  ],
+  "Author": "CHU_BDX",
+  "Linting": {
+    "activeLinter": "Aucun",
+    "activeLinterId": "7b75fb44-43fd-4631-a878-29f4d5d8399a",
+    "warningCount": 0,
+    "errorCount": 0
+  },
+  "Bindings": [],
+  "View": {
+    "Dynamo": {
+      "ScaleFactor": 1.0,
+      "HasRunWithoutCrash": false,
+      "IsVisibleInDynamoLibrary": true,
+      "Version": "2.16.4.10216",
+      "RunType": "Manual",
+      "RunPeriod": "1000"
+    },
+    "Camera": {
+      "Name": "Aperçu en arrière-plan",
+      "EyeX": 6693.77197265625,
+      "EyeY": 6127.146484375,
+      "EyeZ": 6962.70458984375,
+      "LookX": -5341.97607421875,
+      "LookY": -6892.68896484375,
+      "LookZ": -7268.72314453125,
+      "UpX": -0.25025889277458191,
+      "UpY": 0.906307578086853,
+      "UpZ": -0.34055420756340027
+    },
+    "ConnectorPins": [],
+    "NodeViews": [
+      {
+        "Name": "1.Plan DWG",
+        "ShowGeometry": true,
+        "Id": "569f771ba17e4acea02e7666a29e5bfd",
+        "IsSetAsInput": true,
+        "IsSetAsOutput": false,
+        "Excluded": false,
+        "X": 962.37297754460087,
+        "Y": 1219.0100666530097
+      },
+      {
+        "Name": "3.Niveau",
+        "ShowGeometry": true,
+        "Id": "51bf6ad1206b43faab106b3db611be3e",
+        "IsSetAsInput": true,
+        "IsSetAsOutput": false,
+        "Excluded": false,
+        "X": 941.37297754460087,
+        "Y": 1562.0100666530097
+      },
+      {
+        "Name": "2.Calque SDP",
+        "ShowGeometry": true,
+        "Id": "7d3ed75875cb44718aee32f2e1eb01bd",
+        "IsSetAsInput": true,
+        "IsSetAsOutput": false,
+        "Excluded": false,
+        "X": 939.37297754460087,
+        "Y": 1388.0100666530097
+      },
+      {
+        "Name": "CAD.CurvesFromCADLayers",
+        "ShowGeometry": true,
+        "Id": "82554ef68e3c432aa8fc0ec3f24d6621",
+        "IsSetAsInput": false,
+        "IsSetAsOutput": false,
+        "Excluded": false,
+        "X": 1296.8029775446009,
+        "Y": 1319.0100666530097
+      },
+      {
+        "Name": "List.Flatten",
+        "ShowGeometry": true,
+        "Id": "29dbe8d411424f4294df7691a6a321a9",
+        "IsSetAsInput": false,
+        "IsSetAsOutput": false,
+        "Excluded": false,
+        "X": 1701.8029775446009,
+        "Y": 1319.0100666530097
+      },
+      {
+        "Name": "Code Block",
+        "ShowGeometry": true,
+        "Id": "ebc0c0deba5f48fbb01022c14b4d9138",
+        "IsSetAsInput": false,
+        "IsSetAsOutput": false,
+        "Excluded": false,
+        "X": 1996.8029775446009,
+        "Y": 1568.8375666530098
+      },
+      {
+        "Name": "Group.ByElements",
+        "ShowGeometry": true,
+        "Id": "41e97a32713242b19bcb3ce050540d60",
+        "IsSetAsInput": false,
+        "IsSetAsOutput": false,
+        "Excluded": false,
+        "X": 2673.8029775446012,
+        "Y": 1463.0100666530097
+      },
+      {
+        "Name": "Python Script",
+        "ShowGeometry": true,
+        "Id": "095006edf92b4dc6b6418a7fa9b36a29",
+        "IsSetAsInput": false,
+        "IsSetAsOutput": false,
+        "Excluded": false,
+        "X": 2399.8029775446012,
+        "Y": 1463.0100666530097
+      },
+      {
+        "Name": "Curve.PullOntoPlane",
+        "ShowGeometry": true,
+        "Id": "7979718042554c69b1b07e5f25dd24e1",
+        "IsSetAsInput": false,
+        "IsSetAsOutput": false,
+        "Excluded": false,
+        "X": 1996.8029775446009,
+        "Y": 1391.0100666530097
+      },
+      {
+        "Name": "Level Plane",
+        "ShowGeometry": true,
+        "Id": "fafea9df3aa247719f061147ae3d5cb4",
+        "IsSetAsInput": false,
+        "IsSetAsOutput": false,
+        "Excluded": false,
+        "X": 1701.8029775446009,
+        "Y": 1497.0100666530097
+      }
+    ],
+    "Annotations": [
+      {
+        "Id": "0693865063c24a5d920b1c4c170d75db",
+        "Title": "SET Limites",
+        "DescriptionText": "<Double-cliquer ici pour modifier la description du groupe>",
+        "IsExpanded": true,
+        "WidthAdjustment": 0.0,
+        "HeightAdjustment": 0.0,
+        "Nodes": [
+          "82554ef68e3c432aa8fc0ec3f24d6621",
+          "29dbe8d411424f4294df7691a6a321a9",
+          "41e97a32713242b19bcb3ce050540d60",
+          "ebc0c0deba5f48fbb01022c14b4d9138",
+          "fafea9df3aa247719f061147ae3d5cb4",
+          "7979718042554c69b1b07e5f25dd24e1",
+          "095006edf92b4dc6b6418a7fa9b36a29"
+        ],
+        "HasNestedGroups": false,
+        "Left": 1286.8029775446009,
+        "Top": 1246.0100666530097,
+        "Width": 1616.0000000000002,
+        "Height": 454.8275000000001,
+        "FontSize": 36.0,
+        "InitialTop": 1319.0100666530097,
+        "InitialHeight": 394.8275000000001,
+        "TextblockHeight": 63.0,
+        "Background": "#FFC1D676"
+      },
+      {
+        "Id": "c759ec4d79f444ebad7db1f03cc82974",
+        "Title": "<Double-cliquer ici pour modifier le titre du groupe>",
+        "DescriptionText": "<Double-cliquer ici pour modifier la description du groupe>",
+        "IsExpanded": true,
+        "WidthAdjustment": 0.0,
+        "HeightAdjustment": 0.0,
+        "Nodes": [
+          "569f771ba17e4acea02e7666a29e5bfd",
+          "51bf6ad1206b43faab106b3db611be3e",
+          "7d3ed75875cb44718aee32f2e1eb01bd"
+        ],
+        "HasNestedGroups": false,
+        "Left": 929.37297754460087,
+        "Top": 1007.0100666530097,
+        "Width": 281.43,
+        "Height": 687.0,
+        "FontSize": 36.0,
+        "InitialTop": 1219.0100666530097,
+        "InitialHeight": 488.0,
+        "TextblockHeight": 202.0,
+        "Background": "#FFFFB8D8"
+      }
+    ],
+    "X": -416.35165071699384,
+    "Y": 213.21341109801335,
+    "Zoom": 0.51351412657792006
+  }
+}
