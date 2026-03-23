@@ -1,0 +1,266 @@
+{
+  "Uuid": "bd24f176-b9c4-428e-ae46-6ef4ee57c448",
+  "IsCustomNode": false,
+  "Description": "",
+  "Name": "RVT_Change_Chemin_Reseaux",
+  "ElementResolver": {
+    "ResolutionMap": {}
+  },
+  "Inputs": [
+    {
+      "Id": "8a7dca2d82504455b12283458115f2e5",
+      "Name": "01.Old Path",
+      "Type": "string",
+      "Type2": "string",
+      "Value": "Z:\\H",
+      "Description": "Crée une chaîne.",
+      "SelectedIndex": 0
+    },
+    {
+      "Id": "e969822bbc244b4780cd496f5f0c7a3b",
+      "Name": "02.New Path",
+      "Type": "string",
+      "Type2": "string",
+      "Value": "A:\\I03rgu\\H",
+      "Description": "Crée une chaîne.",
+      "SelectedIndex": 0
+    }
+  ],
+  "Outputs": [
+    {
+      "Id": "5688e8882e7f4349b53513e54eb25fdc",
+      "Name": "03.Results",
+      "Type": "string",
+      "InitialValue": "3 lien(s) mis à jour :\n[DWG] A:\\I03rgu\\H\\Conception\\CUI_CUISINES\\S1\\06HCUIS1_FDP.dwg\n[DWG] A:\\I03rgu\\H\\Conception\\CUI_CUISINES\\00\\06HCUI00_FDP.dwg\n[DWG] A:\\I03rgu\\H\\Conception\\CUI_CUISINES\\E1\\06HCUIE1_FDP.dwg",
+      "Description": "Visualiser la sortie du nœud"
+    }
+  ],
+  "Nodes": [
+    {
+      "ConcreteType": "PythonNodeModels.PythonNode, PythonNodeModels",
+      "NodeType": "PythonScriptNode",
+      "Code": "import clr\r\nclr.AddReference('RevitAPI')\r\nclr.AddReference('RevitServices')\r\nfrom Autodesk.Revit.DB import *\r\nfrom RevitServices.Persistence import DocumentManager\r\nfrom RevitServices.Transactions import TransactionManager\r\n\r\ndoc = DocumentManager.Instance.CurrentDBDocument\r\n\r\nold_path = IN[0]  # ex: \"Z:\\\\H\"\r\nnew_path = IN[1]  # ex: \"A:\\\\I03rgu\\\\H\"\r\n\r\nupdated = []\r\n\r\nTransactionManager.Instance.EnsureInTransaction(doc)\r\n\r\n# Liens Revit (.rvt)\r\nrevit_links = FilteredElementCollector(doc).OfClass(RevitLinkType)\r\nfor link in revit_links:\r\n    if not link.IsExternalFileReference():  # ← garde-fou ajouté\r\n        continue\r\n    external_ref = link.GetExternalFileReference()\r\n    current_path = ModelPathUtils.ConvertModelPathToUserVisiblePath(\r\n        external_ref.GetAbsolutePath()\r\n    )\r\n    if old_path in current_path:\r\n        new_full_path = current_path.replace(old_path, new_path)\r\n        new_model_path = ModelPathUtils.ConvertUserVisiblePathToModelPath(new_full_path)\r\n        link.LoadFrom(new_model_path, WorksetConfiguration())\r\n        updated.append(\"[RVT] \" + new_full_path)\r\n\r\n# Liens CAD/DWG (.dwg)\r\ncad_links = FilteredElementCollector(doc).OfClass(CADLinkType)\r\nfor link in cad_links:\r\n    if not link.IsExternalFileReference():  # ← garde-fou ajouté (exclut les imports)\r\n        continue\r\n    external_ref = link.GetExternalFileReference()\r\n    current_path = ModelPathUtils.ConvertModelPathToUserVisiblePath(\r\n        external_ref.GetAbsolutePath()\r\n    )\r\n    if old_path in current_path:\r\n        new_full_path = current_path.replace(old_path, new_path)\r\n        link.LoadFrom(new_full_path)\r\n        updated.append(\"[DWG] \" + new_full_path)\r\n\r\nTransactionManager.Instance.TransactionTaskDone()\r\n\r\nOUT = \"{} lien(s) mis à jour :\\n{}\".format(len(updated), \"\\n\".join(updated))",
+      "Engine": "CPython3",
+      "EngineName": "CPython3",
+      "VariableInputPorts": true,
+      "Id": "6ab7c2f90855403e91b6ebef8d9a2b03",
+      "Inputs": [
+        {
+          "Id": "22a161dfc2674b51a90ccd73a2c4124a",
+          "Name": "IN[0]",
+          "Description": "Input #0",
+          "UsingDefaultValue": false,
+          "Level": 2,
+          "UseLevels": false,
+          "KeepListStructure": false
+        },
+        {
+          "Id": "70da3b7dced547a7b54680727b621778",
+          "Name": "IN[1]",
+          "Description": "Input #1",
+          "UsingDefaultValue": false,
+          "Level": 2,
+          "UseLevels": false,
+          "KeepListStructure": false
+        }
+      ],
+      "Outputs": [
+        {
+          "Id": "f1e31b4e4b7f4b87be7bd2e475e1a14f",
+          "Name": "OUT",
+          "Description": "Résultat du script Python",
+          "UsingDefaultValue": false,
+          "Level": 2,
+          "UseLevels": false,
+          "KeepListStructure": false
+        }
+      ],
+      "Replication": "Disabled",
+      "Description": "Exécute un script Python intégré."
+    },
+    {
+      "ConcreteType": "CoreNodeModels.Watch, CoreNodeModels",
+      "NodeType": "ExtensionNode",
+      "Id": "5688e8882e7f4349b53513e54eb25fdc",
+      "Inputs": [
+        {
+          "Id": "2845508f33344b989b2eabfd7c1fbf57",
+          "Name": "",
+          "Description": "Afficher la sortie de ce noeud",
+          "UsingDefaultValue": false,
+          "Level": 2,
+          "UseLevels": false,
+          "KeepListStructure": false
+        }
+      ],
+      "Outputs": [
+        {
+          "Id": "c57f7b7117d34449a5dfaa69f3fed6e0",
+          "Name": "",
+          "Description": "Sortie du noeud",
+          "UsingDefaultValue": false,
+          "Level": 2,
+          "UseLevels": false,
+          "KeepListStructure": false
+        }
+      ],
+      "Replication": "Disabled",
+      "Description": "Visualiser la sortie du nœud"
+    },
+    {
+      "ConcreteType": "CoreNodeModels.Input.StringInput, CoreNodeModels",
+      "NodeType": "StringInputNode",
+      "InputValue": "Z:\\H",
+      "Id": "8a7dca2d82504455b12283458115f2e5",
+      "Inputs": [],
+      "Outputs": [
+        {
+          "Id": "6f2549d9f8874a8184c879eb7501a1a0",
+          "Name": "",
+          "Description": "String",
+          "UsingDefaultValue": false,
+          "Level": 2,
+          "UseLevels": false,
+          "KeepListStructure": false
+        }
+      ],
+      "Replication": "Disabled",
+      "Description": "Crée une chaîne."
+    },
+    {
+      "ConcreteType": "CoreNodeModels.Input.StringInput, CoreNodeModels",
+      "NodeType": "StringInputNode",
+      "InputValue": "A:\\I03rgu\\H",
+      "Id": "e969822bbc244b4780cd496f5f0c7a3b",
+      "Inputs": [],
+      "Outputs": [
+        {
+          "Id": "520e6f74fc174a6f9c7c18fa41a381e5",
+          "Name": "",
+          "Description": "String",
+          "UsingDefaultValue": false,
+          "Level": 2,
+          "UseLevels": false,
+          "KeepListStructure": false
+        }
+      ],
+      "Replication": "Disabled",
+      "Description": "Crée une chaîne."
+    }
+  ],
+  "Connectors": [
+    {
+      "Start": "f1e31b4e4b7f4b87be7bd2e475e1a14f",
+      "End": "2845508f33344b989b2eabfd7c1fbf57",
+      "Id": "8dabe1284f394cf3ba8a35b6808a3c9e",
+      "IsHidden": "False"
+    },
+    {
+      "Start": "6f2549d9f8874a8184c879eb7501a1a0",
+      "End": "22a161dfc2674b51a90ccd73a2c4124a",
+      "Id": "199af5e2485f4795abbcc2da24901fc6",
+      "IsHidden": "False"
+    },
+    {
+      "Start": "520e6f74fc174a6f9c7c18fa41a381e5",
+      "End": "70da3b7dced547a7b54680727b621778",
+      "Id": "5d833c6e859542c68d052fea6ded1e8a",
+      "IsHidden": "False"
+    }
+  ],
+  "Dependencies": [],
+  "NodeLibraryDependencies": [],
+  "Thumbnail": "",
+  "GraphDocumentationURL": null,
+  "ExtensionWorkspaceData": [
+    {
+      "ExtensionGuid": "28992e1d-abb9-417f-8b1b-05e053bee670",
+      "Name": "Propriétés",
+      "Version": "2.16",
+      "Data": {}
+    },
+    {
+      "ExtensionGuid": "DFBD9CC0-DB40-457A-939E-8C8555555A9D",
+      "Name": "Generative Design",
+      "Version": "3.0",
+      "Data": {}
+    }
+  ],
+  "Author": "",
+  "Linting": {
+    "activeLinter": "Aucun",
+    "activeLinterId": "7b75fb44-43fd-4631-a878-29f4d5d8399a",
+    "warningCount": 0,
+    "errorCount": 0
+  },
+  "Bindings": [],
+  "View": {
+    "Dynamo": {
+      "ScaleFactor": 1.0,
+      "HasRunWithoutCrash": true,
+      "IsVisibleInDynamoLibrary": true,
+      "Version": "2.16.4.10216",
+      "RunType": "Manual",
+      "RunPeriod": "1000"
+    },
+    "Camera": {
+      "Name": "Aperçu en arrière-plan",
+      "EyeX": -17.0,
+      "EyeY": 24.0,
+      "EyeZ": 50.0,
+      "LookX": 12.0,
+      "LookY": -13.0,
+      "LookZ": -58.0,
+      "UpX": 0.0,
+      "UpY": 1.0,
+      "UpZ": 0.0
+    },
+    "ConnectorPins": [],
+    "NodeViews": [
+      {
+        "Name": "Python Script",
+        "ShowGeometry": true,
+        "Id": "6ab7c2f90855403e91b6ebef8d9a2b03",
+        "IsSetAsInput": false,
+        "IsSetAsOutput": false,
+        "Excluded": false,
+        "X": 92.09541890460946,
+        "Y": 2388.1182656100182
+      },
+      {
+        "Name": "03.Results",
+        "ShowGeometry": true,
+        "Id": "5688e8882e7f4349b53513e54eb25fdc",
+        "IsSetAsInput": false,
+        "IsSetAsOutput": true,
+        "Excluded": false,
+        "X": 366.09541890460946,
+        "Y": 2388.1182656100182
+      },
+      {
+        "Name": "01.Old Path",
+        "ShowGeometry": true,
+        "Id": "8a7dca2d82504455b12283458115f2e5",
+        "IsSetAsInput": true,
+        "IsSetAsOutput": false,
+        "Excluded": false,
+        "X": -161.90458109539054,
+        "Y": 2331.1182656100182
+      },
+      {
+        "Name": "02.New Path",
+        "ShowGeometry": true,
+        "Id": "e969822bbc244b4780cd496f5f0c7a3b",
+        "IsSetAsInput": true,
+        "IsSetAsOutput": false,
+        "Excluded": false,
+        "X": -161.90458109539054,
+        "Y": 2479.1182656100182
+      }
+    ],
+    "Annotations": [],
+    "X": 118.85582006154459,
+    "Y": -2612.1608311304249,
+    "Zoom": 1.2934796932966468
+  }
+}
