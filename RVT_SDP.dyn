@@ -2,7 +2,7 @@
   "Uuid": "0a45910c-7f44-49e5-a72f-ab6250ff663b",
   "IsCustomNode": false,
   "Description": "",
-  "Name": "SDP_RVT",
+  "Name": "RVT_SDP",
   "ElementResolver": {
     "ResolutionMap": {
       "Document.Current": {
@@ -52,19 +52,27 @@
       "Type2": "dropdownSelection",
       "Value": "S2",
       "Description": "Sélectionner un niveau dans le document actif",
-      "SelectedIndex": 13
+      "SelectedIndex": -1
     },
     {
-      "Id": "7d3ed75875cb44718aee32f2e1eb01bd",
-      "Name": "2.Calque SDP",
-      "Type": "string",
-      "Type2": "string",
-      "Value": "Surface_Plancher",
-      "Description": "Crée une chaîne.",
+      "Id": "46788dd7ae994b719a028ac4be358a6a",
+      "Name": "2.Calque DWG",
+      "Type": "selection",
+      "Type2": "dropdownSelection",
+      "Value": "Surface de Plancher",
+      "Description": "Menu déroulant avec valeurs personnalisables.",
       "SelectedIndex": 0
     }
   ],
-  "Outputs": [],
+  "Outputs": [
+    {
+      "Id": "cea866ca642b49209b9a8c656f69e126",
+      "Name": "Watch",
+      "Type": "unknown",
+      "InitialValue": "",
+      "Description": "Visualiser la sortie du nœud"
+    }
+  ],
   "Nodes": [
     {
       "ConcreteType": "Dynamo.Nodes.DSModelElementSelection, DSRevitNodesUI",
@@ -89,7 +97,7 @@
     },
     {
       "ConcreteType": "DSRevitNodesUI.Levels, DSRevitNodesUI",
-      "SelectedIndex": 13,
+      "SelectedIndex": -1,
       "SelectedString": "S2",
       "NodeType": "ExtensionNode",
       "Id": "51bf6ad1206b43faab106b3db611be3e",
@@ -107,26 +115,6 @@
       ],
       "Replication": "Disabled",
       "Description": "Sélectionner un niveau dans le document actif"
-    },
-    {
-      "ConcreteType": "CoreNodeModels.Input.StringInput, CoreNodeModels",
-      "NodeType": "StringInputNode",
-      "InputValue": "Surface_Plancher",
-      "Id": "7d3ed75875cb44718aee32f2e1eb01bd",
-      "Inputs": [],
-      "Outputs": [
-        {
-          "Id": "f1be43f2016f49f7911b3c50cdbaf849",
-          "Name": "",
-          "Description": "String",
-          "UsingDefaultValue": false,
-          "Level": 2,
-          "UseLevels": false,
-          "KeepListStructure": false
-        }
-      ],
-      "Replication": "Disabled",
-      "Description": "Crée une chaîne."
     },
     {
       "ConcreteType": "Dynamo.Graph.Nodes.ZeroTouch.DSFunction, DynamoCore",
@@ -241,7 +229,7 @@
       "Inputs": [],
       "Outputs": [
         {
-          "Id": "4213800de1a049b1a01d50c775ad3649",
+          "Id": "c5f3db82983540e097c45b0479b410de",
           "Name": "",
           "Description": "Valeur de l'expression à la ligne 1",
           "UsingDefaultValue": false,
@@ -396,6 +384,66 @@
       ],
       "Replication": "Disabled",
       "Description": "Exécute un script Python intégré."
+    },
+    {
+      "ConcreteType": "CoreNodeModels.Watch, CoreNodeModels",
+      "NodeType": "ExtensionNode",
+      "Id": "cea866ca642b49209b9a8c656f69e126",
+      "Inputs": [
+        {
+          "Id": "a284911950ce4d829f26388400770e66",
+          "Name": "",
+          "Description": "Afficher la sortie de ce noeud",
+          "UsingDefaultValue": false,
+          "Level": 2,
+          "UseLevels": false,
+          "KeepListStructure": false
+        }
+      ],
+      "Outputs": [
+        {
+          "Id": "5d3f899937d44c33ab20b2c625d853d7",
+          "Name": "",
+          "Description": "Sortie du noeud",
+          "UsingDefaultValue": false,
+          "Level": 2,
+          "UseLevels": false,
+          "KeepListStructure": false
+        }
+      ],
+      "Replication": "Disabled",
+      "Description": "Visualiser la sortie du nœud"
+    },
+    {
+      "ConcreteType": "CoreNodeModels.Input.CustomSelection, CoreNodeModels",
+      "SerializedItems": [
+        {
+          "Name": "Surface de Plancher",
+          "Item": "Surface_Plancher"
+        },
+        {
+          "Name": "Emprise au Sol",
+          "Item": "Surface _ Emprise au sol"
+        }
+      ],
+      "SelectedIndex": 0,
+      "SelectedString": "Surface de Plancher",
+      "NodeType": "ExtensionNode",
+      "Id": "46788dd7ae994b719a028ac4be358a6a",
+      "Inputs": [],
+      "Outputs": [
+        {
+          "Id": "b10bca31f97343839846c321fb498edd",
+          "Name": "value",
+          "Description": "Valeur sélectionnée",
+          "UsingDefaultValue": false,
+          "Level": 2,
+          "UseLevels": false,
+          "KeepListStructure": false
+        }
+      ],
+      "Replication": "Disabled",
+      "Description": "Menu déroulant avec valeurs personnalisables."
     }
   ],
   "Connectors": [
@@ -412,12 +460,6 @@
       "IsHidden": "False"
     },
     {
-      "Start": "f1be43f2016f49f7911b3c50cdbaf849",
-      "End": "3ba8580b8b1c48b59ebf184a76deaa8a",
-      "Id": "a13ebedd13a94ec2a36747a07bdb0855",
-      "IsHidden": "False"
-    },
-    {
       "Start": "c33fed02e1c44d6d9c83c53a6c97b11a",
       "End": "443c3079b67a46c088dfdec63fba02f0",
       "Id": "b8d56e79802d4f4e888a7d00e8713078",
@@ -430,7 +472,7 @@
       "IsHidden": "False"
     },
     {
-      "Start": "4213800de1a049b1a01d50c775ad3649",
+      "Start": "c5f3db82983540e097c45b0479b410de",
       "End": "f7718d31133b47e18593db912bfda1c1",
       "Id": "2a32095de6034a0b8449fd5026eaaf13",
       "IsHidden": "False"
@@ -439,6 +481,12 @@
       "Start": "41fd96af6a3c4f86b53ff307fb23b5e9",
       "End": "e83c61592e274affa7d862d6ed93835d",
       "Id": "2309e45c417b4761a184e65643f965b7",
+      "IsHidden": "False"
+    },
+    {
+      "Start": "41fd96af6a3c4f86b53ff307fb23b5e9",
+      "End": "a284911950ce4d829f26388400770e66",
+      "Id": "0085c5259ba04b40a4e26458dfa4228a",
       "IsHidden": "False"
     },
     {
@@ -451,6 +499,12 @@
       "Start": "97bf75a1c6de438894e207a396c18c5d",
       "End": "d2620cb775c24accacfbc4b8b76e4ca0",
       "Id": "c1399a51e0814d4c86e185b2b2be2d02",
+      "IsHidden": "False"
+    },
+    {
+      "Start": "b10bca31f97343839846c321fb498edd",
+      "End": "3ba8580b8b1c48b59ebf184a76deaa8a",
+      "Id": "03041fe6d5754bd6b9893c13bec360cd",
       "IsHidden": "False"
     }
   ],
@@ -492,7 +546,7 @@
   "View": {
     "Dynamo": {
       "ScaleFactor": 1.0,
-      "HasRunWithoutCrash": false,
+      "HasRunWithoutCrash": true,
       "IsVisibleInDynamoLibrary": true,
       "Version": "2.16.4.10216",
       "RunType": "Manual",
@@ -519,8 +573,8 @@
         "IsSetAsInput": true,
         "IsSetAsOutput": false,
         "Excluded": false,
-        "X": 962.37297754460087,
-        "Y": 1219.0100666530097
+        "X": 985.27308344827566,
+        "Y": 1144.0100666530097
       },
       {
         "Name": "3.Niveau",
@@ -529,18 +583,8 @@
         "IsSetAsInput": true,
         "IsSetAsOutput": false,
         "Excluded": false,
-        "X": 941.37297754460087,
-        "Y": 1562.0100666530097
-      },
-      {
-        "Name": "2.Calque SDP",
-        "ShowGeometry": true,
-        "Id": "7d3ed75875cb44718aee32f2e1eb01bd",
-        "IsSetAsInput": true,
-        "IsSetAsOutput": false,
-        "Excluded": false,
-        "X": 939.37297754460087,
-        "Y": 1388.0100666530097
+        "X": 964.27308344827566,
+        "Y": 1697.0100666530097
       },
       {
         "Name": "CAD.CurvesFromCADLayers",
@@ -549,8 +593,8 @@
         "IsSetAsInput": false,
         "IsSetAsOutput": false,
         "Excluded": false,
-        "X": 1296.8029775446009,
-        "Y": 1319.0100666530097
+        "X": 1305.2730834482757,
+        "Y": 1276.8440288489212
       },
       {
         "Name": "List.Flatten",
@@ -559,8 +603,8 @@
         "IsSetAsInput": false,
         "IsSetAsOutput": false,
         "Excluded": false,
-        "X": 1701.8029775446009,
-        "Y": 1319.0100666530097
+        "X": 1710.2730834482757,
+        "Y": 1276.8440288489212
       },
       {
         "Name": "Code Block",
@@ -569,8 +613,8 @@
         "IsSetAsInput": false,
         "IsSetAsOutput": false,
         "Excluded": false,
-        "X": 1996.8029775446009,
-        "Y": 1568.8375666530098
+        "X": 2005.2730834482757,
+        "Y": 1526.6715288489213
       },
       {
         "Name": "Group.ByElements",
@@ -579,8 +623,8 @@
         "IsSetAsInput": false,
         "IsSetAsOutput": false,
         "Excluded": false,
-        "X": 2673.8029775446012,
-        "Y": 1463.0100666530097
+        "X": 2650.9028716409248,
+        "Y": 1287.5206286676807
       },
       {
         "Name": "Python Script",
@@ -589,8 +633,8 @@
         "IsSetAsInput": false,
         "IsSetAsOutput": false,
         "Excluded": false,
-        "X": 2399.8029775446012,
-        "Y": 1463.0100666530097
+        "X": 2408.2730834482754,
+        "Y": 1420.8440288489212
       },
       {
         "Name": "Curve.PullOntoPlane",
@@ -599,8 +643,8 @@
         "IsSetAsInput": false,
         "IsSetAsOutput": false,
         "Excluded": false,
-        "X": 1996.8029775446009,
-        "Y": 1391.0100666530097
+        "X": 2005.2730834482757,
+        "Y": 1348.8440288489212
       },
       {
         "Name": "Level Plane",
@@ -609,8 +653,28 @@
         "IsSetAsInput": false,
         "IsSetAsOutput": false,
         "Excluded": false,
-        "X": 1701.8029775446009,
-        "Y": 1497.0100666530097
+        "X": 1710.2730834482757,
+        "Y": 1454.8440288489212
+      },
+      {
+        "Name": "Watch",
+        "ShowGeometry": true,
+        "Id": "cea866ca642b49209b9a8c656f69e126",
+        "IsSetAsInput": false,
+        "IsSetAsOutput": true,
+        "Excluded": false,
+        "X": 2979.9028716409248,
+        "Y": 1420.8440288489212
+      },
+      {
+        "Name": "2.Calque DWG",
+        "ShowGeometry": true,
+        "Id": "46788dd7ae994b719a028ac4be358a6a",
+        "IsSetAsInput": true,
+        "IsSetAsOutput": false,
+        "Excluded": false,
+        "X": 853.35383407716836,
+        "Y": 1310.8440288489212
       }
     ],
     "Annotations": [
@@ -631,12 +695,12 @@
           "095006edf92b4dc6b6418a7fa9b36a29"
         ],
         "HasNestedGroups": false,
-        "Left": 1286.8029775446009,
-        "Top": 1246.0100666530097,
-        "Width": 1616.0000000000002,
+        "Left": 1295.2730834482757,
+        "Top": 1203.8440288489212,
+        "Width": 1584.6297881926491,
         "Height": 454.8275000000001,
         "FontSize": 36.0,
-        "InitialTop": 1319.0100666530097,
+        "InitialTop": 1276.8440288489212,
         "InitialHeight": 394.8275000000001,
         "TextblockHeight": 63.0,
         "Background": "#FFC1D676"
@@ -651,22 +715,22 @@
         "Nodes": [
           "569f771ba17e4acea02e7666a29e5bfd",
           "51bf6ad1206b43faab106b3db611be3e",
-          "7d3ed75875cb44718aee32f2e1eb01bd"
+          "46788dd7ae994b719a028ac4be358a6a"
         ],
         "HasNestedGroups": false,
-        "Left": 929.37297754460087,
-        "Top": 1007.0100666530097,
-        "Width": 281.43,
-        "Height": 687.0,
+        "Left": 843.35383407716836,
+        "Top": 975.01006665300974,
+        "Width": 351.9192493711073,
+        "Height": 854.0,
         "FontSize": 36.0,
-        "InitialTop": 1219.0100666530097,
-        "InitialHeight": 488.0,
-        "TextblockHeight": 202.0,
+        "InitialTop": 1144.0100666530097,
+        "InitialHeight": 698.0,
+        "TextblockHeight": 159.0,
         "Background": "#FFFFB8D8"
       }
     ],
-    "X": -416.35165071699384,
-    "Y": 213.21341109801335,
-    "Zoom": 0.51351412657792006
+    "X": -170.94885834949207,
+    "Y": -236.46860034820054,
+    "Zoom": 0.50728012326312766
   }
 }
