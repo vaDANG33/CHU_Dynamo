@@ -25,7 +25,7 @@ from RevitServices.Persistence import DocumentManager
 from System.Collections.Generic import HashSet, List
 
 
-MAX_PURGE_PASSES = 10
+MAX_PURGE_PASSES = 5
 BACKUP_RFA = re.compile(r"\.\d{4,}\.rfa$", re.IGNORECASE)
 
 
@@ -145,10 +145,9 @@ def nested_families(doc):
 
 
 def parameter_signature(doc):
-    """Controle que la purge ne touche ni types ni parametres/formules de l'hote."""
+    """Controle les parametres et formules ; Revit decide quels types sont inutilises."""
     manager = doc.FamilyManager
     return {
-        "types": sorted(t.Name for t in manager.Types),
         "parameters": sorted(
             (p.Definition.Name, bool(p.IsInstance), str(p.Formula or ""), bool(p.IsShared))
             for p in manager.Parameters
@@ -158,16 +157,12 @@ def parameter_signature(doc):
 
 def assert_signature(doc, reference):
     if parameter_signature(doc) != reference:
-        raise RuntimeError("Types, parametres ou formules modifies par la purge.")
+        raise RuntimeError("Parametres ou formules modifies par la purge.")
 
 
 def protected_ids(doc):
-    """Ne purge pas les familles imbriquees ni leurs types : utiles a la bibliotheque."""
-    protected = {eid_value(doc.OwnerFamily.Id)}
-    for class_type in (DB.Family, DB.FamilySymbol):
-        protected.update(eid_value(element.Id) for element in
-                         DB.FilteredElementCollector(doc).OfClass(class_type))
-    return protected
+    """La famille proprietaire ne doit jamais etre candidate a la suppression."""
+    return {eid_value(doc.OwnerFamily.Id)}
 
 
 def dotnet_types():
@@ -268,7 +263,7 @@ def in_transaction(doc, name, handler_type, warnings, operation):
 
 
 def purge_conservatively(doc, handler_type, warnings):
-    """Purge iterative via l'API native, en preservant familles, symboles et structure."""
+    """Purge iterative des seuls elements que Revit declare inutilises."""
     if not hasattr(doc, "GetUnusedElements"):
         raise RuntimeError("Document.GetUnusedElements est indisponible dans cette version Revit.")
     signature = parameter_signature(doc)
@@ -385,7 +380,8 @@ def main():
 
         def process(path, role, expected_owner=None, reload_nested=False):
             item = {"fichier": path, "role": role, "statut": "EN_COURS",
-                    "recharges": [], "sans_source": [], "avertissements": []}
+                    "recharges": [], "echecs_rechargement": [],
+                    "sans_source": [], "avertissements": []}
             report["fichiers"].append(item)
             try:
                 item["taille_avant"] = os.path.getsize(path)
@@ -407,9 +403,23 @@ def main():
                             item["sans_source"].append(element_name(doc, family))
                             continue
                         if outcomes.get(child_path, {}).get("statut") != "OK":
-                            raise RuntimeError("Source imbriquee non prete : " + child_path)
+                            item["echecs_rechargement"].append({
+                                "fichier": child_path,
+                                "erreur": "Source imbriquee non prete"
+                            })
+                            continue
                         # LoadFamily est appele hors transaction : condition requise par Revit.
-                        load_result = doc.LoadFamily(child_path, load_options)
+                        # La surcharge a trois arguments force l'utilisation de
+                        # LoadFamily(String, IFamilyLoadOptions, out Family).
+                        # En PythonNet3, l'argument ``out`` est fourni par None et
+                        # le resultat est retourne sous forme de tuple.
+                        try:
+                            load_result = doc.LoadFamily(child_path, load_options, None)
+                        except Exception as error:
+                            item["echecs_rechargement"].append({
+                                "fichier": child_path, "erreur": str(error)
+                            })
+                            continue
                         # PythonNet3 expose l'overload LoadFamily(..., out Family)
                         # sous la forme (bool success, Family loaded).
                         if isinstance(load_result, tuple):
@@ -420,9 +430,17 @@ def main():
                             success = load_result is not None
                             loaded = load_result
                         if not success or loaded is None:
-                            raise RuntimeError("Echec de rechargement : " + child_path)
+                            item["echecs_rechargement"].append({
+                                "fichier": child_path,
+                                "erreur": "Revit a refuse le rechargement"
+                            })
+                            continue
                         if identity(doc, loaded) != child_id:
-                            raise RuntimeError("Rechargement avec identite incoherente : " + child_path)
+                            item["echecs_rechargement"].append({
+                                "fichier": child_path,
+                                "erreur": "Identite de la famille chargee incoherente"
+                            })
+                            continue
                         item["recharges"].append(child_path)
 
                     def validate():
@@ -438,7 +456,8 @@ def main():
                     compact_save(doc, path)
                 item["taille_apres"] = os.path.getsize(path)
                 item["gain_octets"] = item["taille_avant"] - item["taille_apres"]
-                item["statut"] = "OK"
+                item["statut"] = ("OK_AVEC_ECHECS_RECHARGEMENT"
+                                  if item["echecs_rechargement"] else "OK")
             except Exception as error:
                 item["statut"] = "ECHEC"
                 item["erreur"] = str(error)
@@ -459,7 +478,7 @@ def main():
         report["erreurs_globales"].append(str(error))
     finally:
         report["bilan"] = {
-            "reussis": sum(item["statut"] == "OK" for item in report["fichiers"]),
+            "reussis": sum(item["statut"].startswith("OK") for item in report["fichiers"]),
             "echecs": sum(item["statut"] == "ECHEC" for item in report["fichiers"]),
             "non_traites": len(nested_paths) + len(host_paths) - len(report["fichiers"]),
         }
