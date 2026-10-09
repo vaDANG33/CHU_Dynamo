@@ -199,8 +199,8 @@
     },
     {
       "ConcreteType": "CoreNodeModels.Watch, CoreNodeModels",
-      "WatchWidth": 679.0,
-      "WatchHeight": 363.0,
+      "WatchWidth": 697.0,
+      "WatchHeight": 301.0,
       "Id": "676e308a106d430da917ab99d8c79a2c",
       "NodeType": "ExtensionNode",
       "Inputs": [
@@ -227,25 +227,72 @@
       ],
       "Replication": "Disabled",
       "Description": "Visualizes a node's output"
+    },
+    {
+      "ConcreteType": "PythonNodeModels.PythonNode, PythonNodeModels",
+      "Code": "# -*- coding: utf-8 -*-\r\n# ============================================================\r\n# CHU - NETTOYAGE BATCH DES FAMILLES REVIT\r\n# Dynamo CPython3 - Revit 2027\r\n#\r\n# IN[0] = dossier racine contenant les fichiers .rfa\r\n#\r\n# Fonctionnement :\r\n#   1. Recherche récursive des .rfa\r\n#   2. Ouvre chaque famille\r\n#   3. Conserve uniquement les matériaux CHU_*\r\n#   4. Supprime les autres matériaux si Revit l'autorise\r\n#   5. Conserve les assets utilisés par les matériaux restants\r\n#   6. Supprime les assets orphelins\r\n#   7. Purge les éléments inutilisés\r\n#   8. Sauvegarde en mode Compact\r\n#   9. Ferme la famille\r\n#  10. Retourne un rapport détaillé\r\n# ============================================================\r\n\r\nimport clr\r\nimport os\r\nimport re\r\n\r\n# ============================================================\r\n# REVIT API\r\n# ============================================================\r\n\r\nclr.AddReference(\"RevitAPI\")\r\n\r\nfrom Autodesk.Revit.DB import (\r\n    FilteredElementCollector,\r\n    Material,\r\n    AppearanceAssetElement,\r\n    PropertySetElement,\r\n    ElementId,\r\n    Transaction,\r\n    SaveAsOptions\r\n)\r\n\r\nclr.AddReference(\"RevitServices\")\r\n\r\nfrom RevitServices.Persistence import DocumentManager\r\n\r\n\r\n# ============================================================\r\n# CONFIGURATION\r\n# ============================================================\r\n\r\nDOSSIER = IN[0]\r\n\r\n# Convention stricte :\r\n# CHU_BETON -> conservé\r\n# chu_beton -> supprimé\r\n# CHUVERRE -> supprimé\r\nPREFIXE = \"CHU_\"\r\n\r\n# Nombre maximal de passes de purge\r\nMAX_PASSES_PURGE = 20\r\n\r\n\r\n# ============================================================\r\n# APPLICATION REVIT\r\n# ============================================================\r\n\r\nuiapp = DocumentManager.Instance.CurrentUIApplication\r\napp = uiapp.Application\r\n\r\n\r\n# ============================================================\r\n# OUTILS\r\n# ============================================================\r\n\r\ndef taille_fichier(path):\r\n\r\n    try:\r\n        return os.path.getsize(path)\r\n    except:\r\n        return 0\r\n\r\n\r\ndef id_value(element_id):\r\n    \"\"\"\r\n    Compatible avec les changements ElementId\r\n    des versions récentes de Revit.\r\n    \"\"\"\r\n\r\n    try:\r\n        return element_id.Value\r\n    except:\r\n        try:\r\n            return element_id.IntegerValue\r\n        except:\r\n            return None\r\n\r\n\r\ndef nom_element(element):\r\n\r\n    try:\r\n        return element.Name\r\n    except:\r\n        return \"<sans nom>\"\r\n\r\n\r\n# ============================================================\r\n# RECHERCHE DES FAMILLES\r\n# ============================================================\r\n\r\ndef trouver_familles(dossier):\r\n\r\n    fichiers = []\r\n\r\n    # Backup Revit :\r\n    # Famille.0001.rfa\r\n    backup_regex = re.compile(\r\n        r\"\\.\\d{4}\\.rfa$\",\r\n        re.IGNORECASE\r\n    )\r\n\r\n    for root, dirs, names in os.walk(dossier):\r\n\r\n        for name in names:\r\n\r\n            if not name.lower().endswith(\".rfa\"):\r\n                continue\r\n\r\n            # Ne pas retraiter les backups Revit\r\n            if backup_regex.search(name):\r\n                continue\r\n\r\n            fichiers.append(\r\n                os.path.join(root, name)\r\n            )\r\n\r\n    return fichiers\r\n\r\n\r\n# ============================================================\r\n# SUPPRESSION SÉCURISÉE D'UN ÉLÉMENT\r\n# ============================================================\r\n\r\ndef supprimer_element(doc, element, description):\r\n\r\n    nom = nom_element(element)\r\n\r\n    t = Transaction(\r\n        doc,\r\n        \"{} : {}\".format(description, nom)\r\n    )\r\n\r\n    try:\r\n\r\n        t.Start()\r\n\r\n        deleted_ids = doc.Delete(element.Id)\r\n\r\n        nb = len(list(deleted_ids))\r\n\r\n        t.Commit()\r\n\r\n        return True, nb, None\r\n\r\n    except Exception as e:\r\n\r\n        try:\r\n            t.RollBack()\r\n        except:\r\n            pass\r\n\r\n        return False, 0, str(e)\r\n\r\n\r\n# ============================================================\r\n# NETTOYAGE DES MATÉRIAUX\r\n# ============================================================\r\n\r\ndef nettoyer_materiaux(doc):\r\n\r\n    rapport = {\r\n\r\n        \"total\": 0,\r\n\r\n        \"CHU_conserves\": [],\r\n\r\n        \"supprimes\": [],\r\n\r\n        \"non_supprimes\": [],\r\n\r\n        \"erreurs\": []\r\n    }\r\n\r\n\r\n    materials = list(\r\n        FilteredElementCollector(doc)\r\n        .OfClass(Material)\r\n        .ToElements()\r\n    )\r\n\r\n\r\n    rapport[\"total\"] = len(materials)\r\n\r\n\r\n    for mat in materials:\r\n\r\n        nom = nom_element(mat)\r\n\r\n\r\n        # ====================================================\r\n        # WHITELIST CHU_\r\n        # ====================================================\r\n\r\n        if nom.startswith(PREFIXE):\r\n\r\n            rapport[\"CHU_conserves\"].append(nom)\r\n\r\n            continue\r\n\r\n\r\n        # ====================================================\r\n        # SUPPRESSION DES AUTRES\r\n        # ====================================================\r\n\r\n        ok, nb, erreur = supprimer_element(\r\n            doc,\r\n            mat,\r\n            \"CHU - Suppression matériau\"\r\n        )\r\n\r\n\r\n        if ok:\r\n\r\n            rapport[\"supprimes\"].append(nom)\r\n\r\n        else:\r\n\r\n            rapport[\"non_supprimes\"].append(nom)\r\n\r\n            rapport[\"erreurs\"].append(\r\n                \"{} : {}\".format(\r\n                    nom,\r\n                    erreur\r\n                )\r\n            )\r\n\r\n\r\n    return rapport\r\n\r\n\r\n# ============================================================\r\n# RÉCUPÉRER LES MATÉRIAUX RESTANTS\r\n# ============================================================\r\n\r\ndef obtenir_materiaux_restants(doc):\r\n\r\n    return list(\r\n        FilteredElementCollector(doc)\r\n        .OfClass(Material)\r\n        .ToElements()\r\n    )\r\n\r\n\r\n# ============================================================\r\n# ASSETS UTILISÉS\r\n# ============================================================\r\n\r\ndef obtenir_assets_utilises(materials):\r\n\r\n    appearance_ids = set()\r\n\r\n    property_ids = set()\r\n\r\n\r\n    for mat in materials:\r\n\r\n        # ----------------------------------------------------\r\n        # APPEARANCE\r\n        # ----------------------------------------------------\r\n\r\n        try:\r\n\r\n            aid = mat.AppearanceAssetId\r\n\r\n            if (\r\n                aid is not None\r\n                and aid != ElementId.InvalidElementId\r\n            ):\r\n\r\n                val = id_value(aid)\r\n\r\n                if val is not None:\r\n                    appearance_ids.add(val)\r\n\r\n        except:\r\n            pass\r\n\r\n\r\n        # ----------------------------------------------------\r\n        # STRUCTURAL / PHYSICAL\r\n        # ----------------------------------------------------\r\n\r\n        try:\r\n\r\n            sid = mat.StructuralAssetId\r\n\r\n            if (\r\n                sid is not None\r\n                and sid != ElementId.InvalidElementId\r\n            ):\r\n\r\n                val = id_value(sid)\r\n\r\n                if val is not None:\r\n                    property_ids.add(val)\r\n\r\n        except:\r\n            pass\r\n\r\n\r\n        # ----------------------------------------------------\r\n        # THERMAL\r\n        # ----------------------------------------------------\r\n\r\n        try:\r\n\r\n            tid = mat.ThermalAssetId\r\n\r\n            if (\r\n                tid is not None\r\n                and tid != ElementId.InvalidElementId\r\n            ):\r\n\r\n                val = id_value(tid)\r\n\r\n                if val is not None:\r\n                    property_ids.add(val)\r\n\r\n        except:\r\n            pass\r\n\r\n\r\n    return appearance_ids, property_ids\r\n\r\n\r\n# ============================================================\r\n# NETTOYAGE APPEARANCE ASSETS\r\n# ============================================================\r\n\r\ndef nettoyer_appearance_assets(\r\n    doc,\r\n    ids_utilises\r\n):\r\n\r\n    rapport = {\r\n\r\n        \"total\": 0,\r\n\r\n        \"conserves\": [],\r\n\r\n        \"supprimes\": [],\r\n\r\n        \"non_supprimes\": [],\r\n\r\n        \"erreurs\": []\r\n    }\r\n\r\n\r\n    assets = list(\r\n        FilteredElementCollector(doc)\r\n        .OfClass(AppearanceAssetElement)\r\n        .ToElements()\r\n    )\r\n\r\n\r\n    rapport[\"total\"] = len(assets)\r\n\r\n\r\n    for asset in assets:\r\n\r\n        nom = nom_element(asset)\r\n\r\n        val = id_value(asset.Id)\r\n\r\n\r\n        # ====================================================\r\n        # ASSET ENCORE UTILISÉ\r\n        # ====================================================\r\n\r\n        if val in ids_utilises:\r\n\r\n            rapport[\"conserves\"].append(nom)\r\n\r\n            continue\r\n\r\n\r\n        # ====================================================\r\n        # ASSET ORPHELIN\r\n        # ====================================================\r\n\r\n        ok, nb, erreur = supprimer_element(\r\n            doc,\r\n            asset,\r\n            \"CHU - Suppression Appearance Asset\"\r\n        )\r\n\r\n\r\n        if ok:\r\n\r\n            rapport[\"supprimes\"].append(nom)\r\n\r\n        else:\r\n\r\n            rapport[\"non_supprimes\"].append(nom)\r\n\r\n            rapport[\"erreurs\"].append(\r\n                \"{} : {}\".format(\r\n                    nom,\r\n                    erreur\r\n                )\r\n            )\r\n\r\n\r\n    return rapport\r\n\r\n\r\n# ============================================================\r\n# NETTOYAGE STRUCTURAL / THERMAL ASSETS\r\n# ============================================================\r\n\r\ndef nettoyer_property_assets(\r\n    doc,\r\n    ids_utilises\r\n):\r\n\r\n    rapport = {\r\n\r\n        \"total\": 0,\r\n\r\n        \"conserves\": [],\r\n\r\n        \"supprimes\": [],\r\n\r\n        \"non_supprimes\": [],\r\n\r\n        \"erreurs\": []\r\n    }\r\n\r\n\r\n    assets = list(\r\n        FilteredElementCollector(doc)\r\n        .OfClass(PropertySetElement)\r\n        .ToElements()\r\n    )\r\n\r\n\r\n    rapport[\"total\"] = len(assets)\r\n\r\n\r\n    for asset in assets:\r\n\r\n        nom = nom_element(asset)\r\n\r\n        val = id_value(asset.Id)\r\n\r\n\r\n        # ====================================================\r\n        # ASSET ENCORE UTILISÉ\r\n        # ====================================================\r\n\r\n        if val in ids_utilises:\r\n\r\n            rapport[\"conserves\"].append(nom)\r\n\r\n            continue\r\n\r\n\r\n        # ====================================================\r\n        # ASSET ORPHELIN\r\n        # ====================================================\r\n\r\n        ok, nb, erreur = supprimer_element(\r\n            doc,\r\n            asset,\r\n            \"CHU - Suppression Property Asset\"\r\n        )\r\n\r\n\r\n        if ok:\r\n\r\n            rapport[\"supprimes\"].append(nom)\r\n\r\n        else:\r\n\r\n            rapport[\"non_supprimes\"].append(nom)\r\n\r\n            rapport[\"erreurs\"].append(\r\n                \"{} : {}\".format(\r\n                    nom,\r\n                    erreur\r\n                )\r\n            )\r\n\r\n\r\n    return rapport\r\n\r\n\r\n# ============================================================\r\n# PURGE REVIT\r\n# ============================================================\r\n\r\ndef purge_revit(doc):\r\n\r\n    rapport = {\r\n\r\n        \"passes\": 0,\r\n\r\n        \"supprimes\": 0,\r\n\r\n        \"details\": [],\r\n\r\n        \"erreurs\": []\r\n    }\r\n\r\n\r\n    for numero_passe in range(\r\n        1,\r\n        MAX_PASSES_PURGE + 1\r\n    ):\r\n\r\n        # ====================================================\r\n        # ÉLÉMENTS PURGEABLES\r\n        # ====================================================\r\n\r\n        try:\r\n\r\n            unused_ids = doc.GetUnusedElements(set())\r\n\r\n        except Exception as e:\r\n\r\n            rapport[\"erreurs\"].append(\r\n                \"GetUnusedElements : {}\".format(\r\n                    str(e)\r\n                )\r\n            )\r\n\r\n            break\r\n\r\n\r\n        if unused_ids is None:\r\n            break\r\n\r\n\r\n        ids = list(unused_ids)\r\n\r\n\r\n        if len(ids) == 0:\r\n            break\r\n\r\n\r\n        # ====================================================\r\n        # TRANSACTION\r\n        # ====================================================\r\n\r\n        t = Transaction(\r\n            doc,\r\n            \"CHU - Purge passe {}\".format(\r\n                numero_passe\r\n            )\r\n        )\r\n\r\n\r\n        try:\r\n\r\n            t.Start()\r\n\r\n            deleted_ids = doc.Delete(ids)\r\n\r\n            nb_deleted = len(\r\n                list(deleted_ids)\r\n            )\r\n\r\n            t.Commit()\r\n\r\n\r\n            rapport[\"passes\"] += 1\r\n\r\n            rapport[\"supprimes\"] += nb_deleted\r\n\r\n\r\n            rapport[\"details\"].append({\r\n\r\n                \"passe\": numero_passe,\r\n\r\n                \"candidats\": len(ids),\r\n\r\n                \"supprimes\": nb_deleted\r\n            })\r\n\r\n\r\n            # Plus rien supprimé :\r\n            # arrêt de sécurité\r\n\r\n            if nb_deleted == 0:\r\n                break\r\n\r\n\r\n        except Exception as e:\r\n\r\n            try:\r\n                t.RollBack()\r\n            except:\r\n                pass\r\n\r\n\r\n            rapport[\"erreurs\"].append(\r\n                \"Passe {} : {}\".format(\r\n                    numero_passe,\r\n                    str(e)\r\n                )\r\n            )\r\n\r\n            break\r\n\r\n\r\n    return rapport\r\n\r\n\r\n# ============================================================\r\n# TRAITEMENT D'UNE FAMILLE\r\n# ============================================================\r\n\r\ndef traiter_famille(path):\r\n\r\n    resultat = {\r\n\r\n        \"fichier\": path,\r\n\r\n        \"statut\": \"ERREUR\",\r\n\r\n        \"taille_avant\": 0,\r\n\r\n        \"taille_apres\": 0,\r\n\r\n        \"gain_octets\": 0,\r\n\r\n        \"gain_pourcent\": 0.0,\r\n\r\n        \"materiaux\": {},\r\n\r\n        \"appearance_assets\": {},\r\n\r\n        \"property_assets\": {},\r\n\r\n        \"purge\": {},\r\n\r\n        \"avertissements\": []\r\n    }\r\n\r\n\r\n    doc = None\r\n\r\n\r\n    # ========================================================\r\n    # TAILLE AVANT\r\n    # ========================================================\r\n\r\n    resultat[\"taille_avant\"] = (\r\n        taille_fichier(path)\r\n    )\r\n\r\n\r\n    try:\r\n\r\n        # ====================================================\r\n        # OUVERTURE\r\n        # ====================================================\r\n\r\n        doc = app.OpenDocumentFile(path)\r\n\r\n\r\n        # Sécurité :\r\n        # normalement le fichier doit être une famille\r\n\r\n        if not doc.IsFamilyDocument:\r\n\r\n            resultat[\"avertissements\"].append(\r\n                \"Le document n'est pas une famille.\"\r\n            )\r\n\r\n            doc.Close(False)\r\n\r\n            doc = None\r\n\r\n            return resultat\r\n\r\n\r\n        # ====================================================\r\n        # 1. MATERIALS\r\n        # ====================================================\r\n\r\n        resultat[\"materiaux\"] = (\r\n            nettoyer_materiaux(doc)\r\n        )\r\n\r\n\r\n        # ====================================================\r\n        # 2. MATÉRIAUX QUI EXISTENT ENCORE\r\n        # ====================================================\r\n\r\n        materials_restants = (\r\n            obtenir_materiaux_restants(doc)\r\n        )\r\n\r\n\r\n        # ====================================================\r\n        # 3. ASSETS QUI DOIVENT ÊTRE CONSERVÉS\r\n        # ====================================================\r\n\r\n        appearance_utilises, property_utilises = (\r\n            obtenir_assets_utilises(\r\n                materials_restants\r\n            )\r\n        )\r\n\r\n\r\n        # ====================================================\r\n        # 4. APPEARANCE ASSETS\r\n        # ====================================================\r\n\r\n        resultat[\"appearance_assets\"] = (\r\n            nettoyer_appearance_assets(\r\n                doc,\r\n                appearance_utilises\r\n            )\r\n        )\r\n\r\n\r\n        # ====================================================\r\n        # 5. STRUCTURAL / THERMAL ASSETS\r\n        # ====================================================\r\n\r\n        resultat[\"property_assets\"] = (\r\n            nettoyer_property_assets(\r\n                doc,\r\n                property_utilises\r\n            )\r\n        )\r\n\r\n\r\n        # ====================================================\r\n        # 6. PURGE REVIT\r\n        # ====================================================\r\n\r\n        resultat[\"purge\"] = (\r\n            purge_revit(doc)\r\n        )\r\n\r\n\r\n        # ====================================================\r\n        # 7. SAVE COMPACT\r\n        # ====================================================\r\n\r\n        options = SaveAsOptions()\r\n\r\n        options.OverwriteExistingFile = True\r\n\r\n        options.Compact = True\r\n\r\n\r\n        doc.SaveAs(\r\n            path,\r\n            options\r\n        )\r\n\r\n\r\n        # ====================================================\r\n        # 8. CLOSE\r\n        # ====================================================\r\n\r\n        doc.Close(False)\r\n\r\n        doc = None\r\n\r\n\r\n        # ====================================================\r\n        # TAILLE APRÈS\r\n        # ====================================================\r\n\r\n        resultat[\"taille_apres\"] = (\r\n            taille_fichier(path)\r\n        )\r\n\r\n\r\n        gain = (\r\n            resultat[\"taille_avant\"]\r\n            -\r\n            resultat[\"taille_apres\"]\r\n        )\r\n\r\n\r\n        resultat[\"gain_octets\"] = gain\r\n\r\n\r\n        if resultat[\"taille_avant\"] > 0:\r\n\r\n            resultat[\"gain_pourcent\"] = round(\r\n                (\r\n                    float(gain)\r\n                    /\r\n                    float(\r\n                        resultat[\"taille_avant\"]\r\n                    )\r\n                )\r\n                * 100.0,\r\n                2\r\n            )\r\n\r\n\r\n        resultat[\"statut\"] = \"OK\"\r\n\r\n\r\n    except Exception as e:\r\n\r\n        resultat[\"statut\"] = \"ERREUR\"\r\n\r\n\r\n        resultat[\"avertissements\"].append(\r\n            str(e)\r\n        )\r\n\r\n\r\n        if doc is not None:\r\n\r\n            try:\r\n                doc.Close(False)\r\n            except:\r\n                pass\r\n\r\n\r\n    return resultat\r\n\r\n\r\n# ============================================================\r\n# PROGRAMME PRINCIPAL\r\n# ============================================================\r\n\r\nif DOSSIER is None:\r\n\r\n    OUT = {\r\n\r\n        \"statut\": \"ERREUR\",\r\n\r\n        \"message\": \"IN[0] est vide.\"\r\n    }\r\n\r\n\r\nelif not os.path.isdir(DOSSIER):\r\n\r\n    OUT = {\r\n\r\n        \"statut\": \"ERREUR\",\r\n\r\n        \"message\":\r\n            \"Dossier introuvable : {}\".format(\r\n                DOSSIER\r\n            )\r\n    }\r\n\r\n\r\nelse:\r\n\r\n    # ========================================================\r\n    # RECHERCHE\r\n    # ========================================================\r\n\r\n    fichiers = trouver_familles(\r\n        DOSSIER\r\n    )\r\n\r\n\r\n    resultats = []\r\n\r\n\r\n    # ========================================================\r\n    # TRAITEMENT\r\n    # ========================================================\r\n\r\n    for fichier in fichiers:\r\n\r\n        resultats.append(\r\n            traiter_famille(fichier)\r\n        )\r\n\r\n\r\n    # ========================================================\r\n    # RÉSUMÉ\r\n    # ========================================================\r\n\r\n    nb_ok = 0\r\n\r\n    nb_erreurs = 0\r\n\r\n    nb_materials_supprimes = 0\r\n\r\n    nb_materials_CHU = 0\r\n\r\n    nb_appearance_supprimes = 0\r\n\r\n    nb_property_supprimes = 0\r\n\r\n    nb_purge = 0\r\n\r\n    gain_total = 0\r\n\r\n\r\n    for r in resultats:\r\n\r\n        # ----------------------------------------------------\r\n        # STATUT\r\n        # ----------------------------------------------------\r\n\r\n        if r[\"statut\"] == \"OK\":\r\n\r\n            nb_ok += 1\r\n\r\n        else:\r\n\r\n            nb_erreurs += 1\r\n\r\n\r\n        # ----------------------------------------------------\r\n        # MATERIALS\r\n        # ----------------------------------------------------\r\n\r\n        try:\r\n\r\n            nb_materials_supprimes += len(\r\n                r[\"materiaux\"][\"supprimes\"]\r\n            )\r\n\r\n            nb_materials_CHU += len(\r\n                r[\"materiaux\"][\"CHU_conserves\"]\r\n            )\r\n\r\n        except:\r\n            pass\r\n\r\n\r\n        # ----------------------------------------------------\r\n        # APPEARANCE\r\n        # ----------------------------------------------------\r\n\r\n        try:\r\n\r\n            nb_appearance_supprimes += len(\r\n                r[\"appearance_assets\"][\"supprimes\"]\r\n            )\r\n\r\n        except:\r\n            pass\r\n\r\n\r\n        # ----------------------------------------------------\r\n        # PROPERTY\r\n        # ----------------------------------------------------\r\n\r\n        try:\r\n\r\n            nb_property_supprimes += len(\r\n                r[\"property_assets\"][\"supprimes\"]\r\n            )\r\n\r\n        except:\r\n            pass\r\n\r\n\r\n        # ----------------------------------------------------\r\n        # PURGE\r\n        # ----------------------------------------------------\r\n\r\n        try:\r\n\r\n            nb_purge += (\r\n                r[\"purge\"][\"supprimes\"]\r\n            )\r\n\r\n        except:\r\n            pass\r\n\r\n\r\n        # ----------------------------------------------------\r\n        # GAIN\r\n        # ----------------------------------------------------\r\n\r\n        gain_total += r.get(\r\n            \"gain_octets\",\r\n            0\r\n        )\r\n\r\n\r\n    # ========================================================\r\n    # SORTIE DYNAMO\r\n    # ========================================================\r\n\r\n    OUT = {\r\n\r\n        \"statut\": \"OK\",\r\n\r\n        \"dossier\": DOSSIER,\r\n\r\n        \"familles_trouvees\": len(fichiers),\r\n\r\n        \"familles_OK\": nb_ok,\r\n\r\n        \"familles_erreur\": nb_erreurs,\r\n\r\n        \"materiaux_CHU_conserves\":\r\n            nb_materials_CHU,\r\n\r\n        \"materiaux_supprimes\":\r\n            nb_materials_supprimes,\r\n\r\n        \"appearance_assets_supprimes\":\r\n            nb_appearance_supprimes,\r\n\r\n        \"property_assets_supprimes\":\r\n            nb_property_supprimes,\r\n\r\n        \"elements_purge_supprimes\":\r\n            nb_purge,\r\n\r\n        \"gain_total_octets\":\r\n            gain_total,\r\n\r\n        \"details\":\r\n            resultats\r\n    }",
+      "Engine": "PythonNet3",
+      "VariableInputPorts": true,
+      "Id": "5110c467e167407d8f420139a5ff3676",
+      "NodeType": "PythonScriptNode",
+      "Inputs": [
+        {
+          "Id": "7d5b3d5c16714c58995e7d00fa74217d",
+          "Name": "IN[0]",
+          "Description": "Input #0",
+          "UsingDefaultValue": false,
+          "Level": 2,
+          "UseLevels": false,
+          "KeepListStructure": false
+        }
+      ],
+      "Outputs": [
+        {
+          "Id": "e3abc82bd372423db2f1912eac5ccdde",
+          "Name": "OUT",
+          "Description": "Result of the python script",
+          "UsingDefaultValue": false,
+          "Level": 2,
+          "UseLevels": false,
+          "KeepListStructure": false
+        }
+      ],
+      "Replication": "Disabled",
+      "Description": "Runs an embedded Python script."
+    },
+    {
+      "ConcreteType": "CoreNodeModels.Input.Directory, CoreNodeModels",
+      "Id": "78d49822e44248c59c100b2a9c32ccb0",
+      "NodeType": "ExtensionNode",
+      "Inputs": [],
+      "Outputs": [
+        {
+          "Id": "12d745a6a7994050bc9cf620b528c61e",
+          "Name": "",
+          "Description": "Directory path",
+          "UsingDefaultValue": false,
+          "Level": 2,
+          "UseLevels": false,
+          "KeepListStructure": false
+        }
+      ],
+      "Replication": "Disabled",
+      "Description": "Allows you to select a directory on the system and returns its path",
+      "HintPath": "D:\\1.PROJETS\\04.FAMILLES\\ELEC\\CHU_ELE_R27",
+      "InputValue": "D:\\1.PROJETS\\04.FAMILLES\\ELEC\\CHU_ELE_R27"
     }
   ],
   "Connectors": [
     {
-      "Start": "4a4239bc0bf048cd9ca41bc039a45f22",
-      "End": "4accf6f9d2f54cde85ba526401f2f6b2",
-      "Id": "92ab8cede3cf4f6780c953a08a01fb1c",
-      "IsHidden": "False"
-    },
-    {
-      "Start": "bccd348f2a5947da826ec89fedd3ac81",
-      "End": "93f07c45b48b4f88af2e4282e1ebcc65",
-      "Id": "a2a918bbe2584c98994a6d29395c80b1",
-      "IsHidden": "False"
-    },
-    {
-      "Start": "1d690c232b2b4d1aa691c52d0cf4f11c",
+      "Start": "e3abc82bd372423db2f1912eac5ccdde",
       "End": "dcb4d27ef1dc4111a7538bdacd13f7b7",
-      "Id": "d51d5333f1dd4e42899ed5cfe3307675",
+      "Id": "3d64caa7a9c14851a53b00c149f5a9d7",
+      "IsHidden": "False"
+    },
+    {
+      "Start": "12d745a6a7994050bc9cf620b528c61e",
+      "End": "7d5b3d5c16714c58995e7d00fa74217d",
+      "Id": "fdc7752e622748b48ffc2e3a145c034d",
       "IsHidden": "False"
     }
   ],
@@ -376,8 +423,8 @@
         "IsSetAsOutput": false,
         "Excluded": false,
         "ShowGeometry": true,
-        "X": 13.04217461489992,
-        "Y": 474.28401612870243
+        "X": 104.07348047009037,
+        "Y": 451.7389909409162
       },
       {
         "Id": "676e308a106d430da917ab99d8c79a2c",
@@ -388,6 +435,26 @@
         "ShowGeometry": true,
         "X": 369.4940411814714,
         "Y": 734.7897270618558
+      },
+      {
+        "Id": "5110c467e167407d8f420139a5ff3676",
+        "Name": "PurgerCompacterFermer",
+        "IsSetAsInput": false,
+        "IsSetAsOutput": false,
+        "Excluded": false,
+        "ShowGeometry": true,
+        "X": -66.89031337302288,
+        "Y": 807.9424491923047
+      },
+      {
+        "Id": "78d49822e44248c59c100b2a9c32ccb0",
+        "Name": "Directory Path Imbriqué",
+        "IsSetAsInput": false,
+        "IsSetAsOutput": false,
+        "Excluded": false,
+        "ShowGeometry": true,
+        "X": -651.5332468233585,
+        "Y": 750.0827771427375
       }
     ],
     "Annotations": [
@@ -413,7 +480,7 @@
         "FontSize": 36.0,
         "GroupStyleId": "00000000-0000-0000-0000-000000000000",
         "InitialTop": -962.7839340688076,
-        "InitialHeight": 493.64815288036243,
+        "InitialHeight": 467.64815288036243,
         "TextblockHeight": 150.0,
         "IsOptionalInPortsCollapsed": false,
         "IsUnconnectedOutPortsCollapsed": false,
@@ -442,7 +509,7 @@
         "FontSize": 36.0,
         "GroupStyleId": "00000000-0000-0000-0000-000000000000",
         "InitialTop": -236.34538361441378,
-        "InitialHeight": 335.906447067425,
+        "InitialHeight": 309.906447067425,
         "TextblockHeight": 150.0,
         "IsOptionalInPortsCollapsed": false,
         "IsUnconnectedOutPortsCollapsed": false,
@@ -471,7 +538,7 @@
         "FontSize": 36.0,
         "GroupStyleId": "00000000-0000-0000-0000-000000000000",
         "InitialTop": 408.8307925949898,
-        "InitialHeight": 335.90644706742523,
+        "InitialHeight": 309.90644706742523,
         "TextblockHeight": 150.0,
         "IsOptionalInPortsCollapsed": false,
         "IsUnconnectedOutPortsCollapsed": false,
@@ -480,8 +547,8 @@
         "Background": "#FFFFB8D8"
       }
     ],
-    "X": 356.23550902593684,
-    "Y": -44.86557234053123,
-    "Zoom": 1.078365281979626
+    "X": 328.94011180435336,
+    "Y": 224.28223925253357,
+    "Zoom": 0.03746858231695858
   }
 }
