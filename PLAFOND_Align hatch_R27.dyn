@@ -1,0 +1,243 @@
+{
+  "Uuid": "0d5fb1ef-c2fb-439c-8d8d-aa8b64baf6a3",
+  "IsCustomNode": false,
+  "Description": "",
+  "Name": "PLAFOND_Align hatch_R27",
+  "ElementResolver": {
+    "ResolutionMap": {}
+  },
+  "Inputs": [],
+  "Outputs": [],
+  "Nodes": [
+    {
+      "ConcreteType": "PythonNodeModels.PythonNode, PythonNodeModels",
+      "Code": "\r\nimport clr\r\nimport math\r\n\r\nclr.AddReference(\"RevitAPI\")\r\nfrom Autodesk.Revit.DB import (\r\n    XYZ, Line, Reference, ReferenceArray,\r\n    HostObjectUtils, Transaction,\r\n    ElementTransformUtils, FilteredElementCollector,\r\n    BuiltInCategory, ViewPlan, ViewType,\r\n    FillPatternTarget, UnitUtils, UnitTypeId\r\n)\r\n\r\nclr.AddReference(\"RevitServices\")\r\nfrom RevitServices.Persistence import DocumentManager\r\nfrom RevitServices.Transactions import TransactionManager\r\n\r\ndoc = DocumentManager.Instance.CurrentDBDocument\r\n\r\n# ==================================================\r\n# PARAMETRES UTILISATEUR\r\n# ==================================================\r\n\r\n# False : analyse uniquement\r\n# True  : alignement des calepinages\r\nEXECUTE = True\r\n\r\n# IN[0] : Ceiling Type (noeud Dynamo)\r\n# IN[1] : Level (noeud Dynamo)\r\n\r\nselected_type = UnwrapElement(IN[0])\r\nselected_level = UnwrapElement(IN[1])\r\n\r\n# ==================================================\r\n# UNITES ET TOLERANCES\r\n# ==================================================\r\n\r\ndef ft(value):\r\n    return UnitUtils.ConvertToInternalUnits(\r\n        value, UnitTypeId.Millimeters\r\n    )\r\n\r\ndef mm(value):\r\n    return round(\r\n        UnitUtils.ConvertFromInternalUnits(\r\n            value, UnitTypeId.Millimeters\r\n        ), 3\r\n    )\r\n\r\nTOL = ft(0.5)\r\nPROBE = ft(200.0)\r\nEXTENT = ft(15000.0)\r\n\r\ndef eid(e):\r\n    return str(e.Id.Value)\r\n\r\n# ==================================================\r\n# SELECTION DES PLAFONDS PAR TYPE ET NIVEAU\r\n# ==================================================\r\n\r\nif selected_type is None:\r\n    raise Exception(\"IN[0] : type de plafond absent\")\r\n\r\nif selected_level is None:\r\n    raise Exception(\"IN[1] : niveau absent\")\r\n\r\ntype_id = selected_type.Id\r\nlevel_id = selected_level.Id\r\n\r\nceilings = []\r\n\r\nall_ceilings = (\r\n    FilteredElementCollector(doc)\r\n    .OfCategory(BuiltInCategory.OST_Ceilings)\r\n    .WhereElementIsNotElementType()\r\n    .ToElements()\r\n)\r\n\r\nfor e in all_ceilings:\r\n    if (\r\n        e.GetTypeId() == type_id\r\n        and e.LevelId == level_id\r\n    ):\r\n        ceilings.append(e)\r\n\r\nceilings.sort(key=lambda e: e.Id.Value)\r\n\r\n# ==================================================\r\n# VUES DU NIVEAU\r\n# ==================================================\r\n\r\nview_cache = {}\r\n\r\nviews = (\r\n    FilteredElementCollector(doc)\r\n    .OfClass(ViewPlan)\r\n    .ToElements()\r\n)\r\n\r\nfor v in views:\r\n    if v.IsTemplate or v.GenLevel is None:\r\n        continue\r\n\r\n    if v.GenLevel.Id != level_id:\r\n        continue\r\n\r\n    if v.ViewType in (\r\n        ViewType.FloorPlan,\r\n        ViewType.CeilingPlan\r\n    ):\r\n        if v.ViewType not in view_cache:\r\n            view_cache[v.ViewType] = v\r\n\r\ndef get_view(view_type):\r\n    if view_type not in view_cache:\r\n        raise Exception(\r\n            \"Vue requise introuvable : \"\r\n            + str(view_type)\r\n        )\r\n    return view_cache[view_type]\r\n\r\n# ==================================================\r\n# GEOMETRIE DU PLAFOND\r\n# ==================================================\r\n\r\ndef center(e):\r\n    bb = e.get_BoundingBox(None)\r\n\r\n    if bb is None:\r\n        raise Exception(\"BoundingBox absent\")\r\n\r\n    return XYZ(\r\n        (bb.Min.X + bb.Max.X) / 2,\r\n        (bb.Min.Y + bb.Max.Y) / 2,\r\n        (bb.Min.Z + bb.Max.Z) / 2\r\n    )\r\n\r\ndef bbox(e):\r\n    bb = e.get_BoundingBox(None)\r\n    return [\r\n        bb.Min.X, bb.Min.Y, bb.Min.Z,\r\n        bb.Max.X, bb.Max.Y, bb.Max.Z\r\n    ]\r\n\r\ndef get_face(e, top):\r\n    refs = list(\r\n        HostObjectUtils.GetTopFaces(e)\r\n        if top else\r\n        HostObjectUtils.GetBottomFaces(e)\r\n    )\r\n\r\n    if len(refs) != 1:\r\n        raise Exception(\r\n            \"Plafond avec plusieurs faces \"\r\n            \"non pris en charge\"\r\n        )\r\n\r\n    return refs[0]\r\n\r\n# ==================================================\r\n# DETECTION AUTOMATIQUE DES DIMENSIONS\r\n# ==================================================\r\n\r\ndef get_pattern(e, face_ref):\r\n    face = e.GetGeometryObjectFromReference(\r\n        face_ref\r\n    )\r\n\r\n    material = doc.GetElement(\r\n        face.MaterialElementId\r\n    )\r\n\r\n    if material is None:\r\n        raise Exception(\"Materiau absent\")\r\n\r\n    pe = doc.GetElement(\r\n        material.SurfaceForegroundPatternId\r\n    )\r\n\r\n    if pe is None:\r\n        raise Exception(\"Motif absent\")\r\n\r\n    pattern = pe.GetFillPattern()\r\n\r\n    if pattern.Target != FillPatternTarget.Model:\r\n        raise Exception(\"Motif non modele\")\r\n\r\n    if pattern.GridCount != 2:\r\n        raise Exception(\r\n            \"Seuls les quadrillages \"\r\n            \"a deux familles sont acceptes\"\r\n        )\r\n\r\n    periods = {}\r\n\r\n    for i in range(pattern.GridCount):\r\n        grid = pattern.GetFillGrid(i)\r\n\r\n        angle = math.degrees(\r\n            grid.Angle\r\n        ) % 180.0\r\n\r\n        # Lignes horizontales :\r\n        # ecartement dans la direction Y\r\n        if min(abs(angle), abs(angle-180)) < 0.01:\r\n            axis = \"Y\"\r\n\r\n        # Lignes verticales :\r\n        # ecartement dans la direction X\r\n        elif abs(angle-90) < 0.01:\r\n            axis = \"X\"\r\n\r\n        else:\r\n            raise Exception(\r\n                \"Motif tourne non pris en charge : \"\r\n                + str(round(angle, 3))\r\n            )\r\n\r\n        period = abs(grid.Offset)\r\n\r\n        if period <= TOL:\r\n            raise Exception(\"Espacement invalide\")\r\n\r\n        if axis in periods:\r\n            raise Exception(\r\n                \"Familles de motifs incompatibles\"\r\n            )\r\n\r\n        periods[axis] = period\r\n\r\n    if set(periods.keys()) != {\"X\", \"Y\"}:\r\n        raise Exception(\"Grille orthogonale absente\")\r\n\r\n    return periods\r\n\r\ndef check_compatibility(top, bottom):\r\n    for axis in (\"X\", \"Y\"):\r\n        if abs(top[axis] - bottom[axis]) > TOL:\r\n            raise Exception(\r\n                \"Espacements dessus/dessous \"\r\n                \"differents suivant \" + axis\r\n            )\r\n\r\n# ==================================================\r\n# REFERENCES DU CALepinage\r\n# ==================================================\r\n\r\ndef hatch_ref(face, index):\r\n    stable = face.ConvertToStableRepresentation(\r\n        doc\r\n    )\r\n\r\n    return Reference.ParseFromStableRepresentation(\r\n        doc, stable + \"/\" + str(index)\r\n    )\r\n\r\n# ==================================================\r\n# PLAN DE REFERENCE TEMPORAIRE\r\n# ==================================================\r\n\r\ndef make_plane(axis, coordinate, view, p):\r\n    z = view.GenLevel.ProjectElevation\r\n\r\n    if axis == \"X\":\r\n        a = XYZ(\r\n            coordinate, p.Y-EXTENT, z\r\n        )\r\n        b = XYZ(\r\n            coordinate, p.Y+EXTENT, z\r\n        )\r\n    else:\r\n        a = XYZ(\r\n            p.X-EXTENT, coordinate, z\r\n        )\r\n        b = XYZ(\r\n            p.X+EXTENT, coordinate, z\r\n        )\r\n\r\n    return doc.Create.NewReferencePlane(\r\n        a, b, XYZ.BasisZ, view\r\n    )\r\n\r\ndef make_dimension(ref, plane, axis, view, p):\r\n    refs = ReferenceArray()\r\n    refs.Append(ref)\r\n    refs.Append(plane.GetReference())\r\n\r\n    z = view.GenLevel.ProjectElevation\r\n\r\n    if axis == \"X\":\r\n        a = XYZ(p.X-EXTENT, p.Y, z)\r\n        b = XYZ(p.X+EXTENT, p.Y, z)\r\n    else:\r\n        a = XYZ(p.X, p.Y-EXTENT, z)\r\n        b = XYZ(p.X, p.Y+EXTENT, z)\r\n\r\n    dim = doc.Create.NewDimension(\r\n        view,\r\n        Line.CreateBound(a, b),\r\n        refs\r\n    )\r\n\r\n    doc.Regenerate()\r\n\r\n    if dim is None or dim.Value is None:\r\n        raise Exception(\"Cote non mesurable\")\r\n\r\n    return dim\r\n\r\n# ==================================================\r\n# MESURE D'UNE LIGNE DE MOTIF\r\n# ==================================================\r\n\r\ndef measure(ref, axis, coordinate, view, p):\r\n    pl = None\r\n    dim = None\r\n\r\n    try:\r\n        pl = make_plane(\r\n            axis, coordinate, view, p\r\n        )\r\n        doc.Regenerate()\r\n\r\n        dim = make_dimension(\r\n            ref, pl, axis, view, p\r\n        )\r\n\r\n        return abs(float(dim.Value))\r\n\r\n    finally:\r\n        if dim is not None:\r\n            doc.Delete(dim.Id)\r\n\r\n        if pl is not None:\r\n            doc.Delete(pl.Id)\r\n\r\n        doc.Regenerate()\r\n\r\ndef coordinate_of(ref, axis, view, p):\r\n    c0 = p.X if axis == \"X\" else p.Y\r\n\r\n    coords = [\r\n        c0,\r\n        c0 + PROBE,\r\n        c0 + 2*PROBE\r\n    ]\r\n\r\n    distances = [\r\n        measure(ref, axis, c, view, p)\r\n        for c in coords\r\n    ]\r\n\r\n    x = (\r\n        distances[0]**2\r\n        - distances[1]**2\r\n        + coords[1]**2\r\n        - coords[0]**2\r\n    ) / (2*(coords[1]-coords[0]))\r\n\r\n    for c, d in zip(coords, distances):\r\n        if abs(abs(x-c)-d) > TOL:\r\n            raise Exception(\r\n                \"Mesures incoherentes\"\r\n            )\r\n\r\n    return x\r\n\r\n# ==================================================\r\n# CALCUL DU DECALAGE PERIODIQUE\r\n# ==================================================\r\n\r\ndef wrap(value, period):\r\n    return value - math.floor(\r\n        value/period + 0.5\r\n    )*period\r\n\r\ndef circular_phase(values, period):\r\n    angles = [\r\n        2*math.pi*v/period\r\n        for v in values\r\n    ]\r\n\r\n    s = sum(math.sin(a) for a in angles)\r\n    c = sum(math.cos(a) for a in angles)\r\n\r\n    if math.hypot(s, c) < 1e-8:\r\n        raise Exception(\r\n            \"Phase de grille ambigue\"\r\n        )\r\n\r\n    return (\r\n        math.atan2(s, c)\r\n        *period/(2*math.pi)\r\n    )\r\n\r\ndef extract_lines(face, view, p, periods):\r\n    groups = {\r\n        \"X\": [],\r\n        \"Y\": []\r\n    }\r\n\r\n    for index in range(1, 13):\r\n        try:\r\n            ref = hatch_ref(face, index)\r\n        except:\r\n            continue\r\n\r\n        candidates = {}\r\n\r\n        for axis in (\"X\", \"Y\"):\r\n            try:\r\n                candidates[axis] = coordinate_of(\r\n                    ref, axis, view, p\r\n                )\r\n            except:\r\n                pass\r\n\r\n        if len(candidates) == 1:\r\n            axis = list(candidates.keys())[0]\r\n\r\n            groups[axis].append({\r\n                \"index\": index,\r\n                \"coord\": candidates[axis]\r\n            })\r\n\r\n    for axis in (\"X\", \"Y\"):\r\n        lines = groups[axis]\r\n\r\n        if len(lines) < 2:\r\n            raise Exception(\r\n                \"References insuffisantes \"\r\n                + axis\r\n            )\r\n\r\n        period = periods[axis]\r\n\r\n        phase = circular_phase(\r\n            [v[\"coord\"] for v in lines],\r\n            period\r\n        )\r\n\r\n        for v in lines:\r\n            residual = wrap(\r\n                v[\"coord\"]-phase,\r\n                period\r\n            )\r\n\r\n            if abs(residual) > TOL:\r\n                raise Exception(\r\n                    \"Grille incoherente : \" + axis\r\n                )\r\n\r\n    return groups\r\n\r\ndef group_phase(lines, period):\r\n    return circular_phase(\r\n        [v[\"coord\"] for v in lines],\r\n        period\r\n    )\r\n\r\ndef difference(top, bottom, period):\r\n    return wrap(\r\n        group_phase(bottom, period)\r\n        - group_phase(top, period),\r\n        period\r\n    )\r\n\r\n# ==================================================\r\n# DEPLACER LE MOTIF SUPERIEUR\r\n# ==================================================\r\n\r\ndef move_pattern(\r\n    face, index, axis,\r\n    delta, view, p\r\n):\r\n    if abs(delta) <= TOL:\r\n        return\r\n\r\n    ref = hatch_ref(face, index)\r\n\r\n    c = p.X if axis == \"X\" else p.Y\r\n\r\n    pl = make_plane(\r\n        axis, c, view, p\r\n    )\r\n\r\n    doc.Regenerate()\r\n\r\n    dim = make_dimension(\r\n        ref, pl, axis, view, p\r\n    )\r\n\r\n    dim.IsLocked = True\r\n    doc.Regenerate()\r\n\r\n    vector = (\r\n        XYZ(delta, 0, 0)\r\n        if axis == \"X\"\r\n        else XYZ(0, delta, 0)\r\n    )\r\n\r\n    ElementTransformUtils.MoveElement(\r\n        doc, pl.Id, vector\r\n    )\r\n\r\n    doc.Regenerate()\r\n\r\n    doc.Delete(dim.Id)\r\n    doc.Delete(pl.Id)\r\n\r\n    doc.Regenerate()\r\n\r\n# ==================================================\r\n# TRAITEMENT D'UN PLAFOND\r\n# ==================================================\r\n\r\ndef process(e):\r\n    p = center(e)\r\n\r\n    top = get_face(e, True)\r\n    bottom = get_face(e, False)\r\n\r\n    top_periods = get_pattern(e, top)\r\n    bottom_periods = get_pattern(e, bottom)\r\n\r\n    check_compatibility(\r\n        top_periods, bottom_periods\r\n    )\r\n\r\n    periods = top_periods\r\n\r\n    vtop = get_view(ViewType.FloorPlan)\r\n    vbottom = get_view(ViewType.CeilingPlan)\r\n\r\n    top_lines = extract_lines(\r\n        top, vtop, p, periods\r\n    )\r\n\r\n    bottom_lines = extract_lines(\r\n        bottom, vbottom, p, periods\r\n    )\r\n\r\n    shifts = {}\r\n    indices = {}\r\n\r\n    for axis in (\"X\", \"Y\"):\r\n        shifts[axis] = difference(\r\n            top_lines[axis],\r\n            bottom_lines[axis],\r\n            periods[axis]\r\n        )\r\n\r\n        selected = min(\r\n            top_lines[axis],\r\n            key=lambda q: abs(\r\n                q[\"coord\"] -\r\n                (p.X if axis == \"X\" else p.Y)\r\n            )\r\n        )\r\n\r\n        indices[axis] = selected[\"index\"]\r\n\r\n    report = {\r\n        \"Id\": eid(e),\r\n        \"Motif_X_mm\": mm(periods[\"X\"]),\r\n        \"Motif_Y_mm\": mm(periods[\"Y\"]),\r\n        \"Decalage_X_mm\": mm(shifts[\"X\"]),\r\n        \"Decalage_Y_mm\": mm(shifts[\"Y\"])\r\n    }\r\n\r\n    aligned = all(\r\n        abs(shifts[a]) <= TOL\r\n        for a in (\"X\", \"Y\")\r\n    )\r\n\r\n    if aligned:\r\n        report[\"Statut\"] = \"DEJA_ALIGNE\"\r\n        return report\r\n\r\n    if not EXECUTE:\r\n        report[\"Statut\"] = \"A_ALIGNER\"\r\n        return report\r\n\r\n    geometry_before = bbox(e)\r\n\r\n    # Modification de la grille superieure\r\n    for axis in (\"X\", \"Y\"):\r\n        move_pattern(\r\n            top,\r\n            indices[axis],\r\n            axis,\r\n            shifts[axis],\r\n            vtop,\r\n            p\r\n        )\r\n\r\n    doc.Regenerate()\r\n\r\n    # Relecture des references apres deplacement\r\n    new_top = extract_lines(\r\n        get_face(e, True),\r\n        vtop,\r\n        p,\r\n        periods\r\n    )\r\n\r\n    residuals = {}\r\n\r\n    for axis in (\"X\", \"Y\"):\r\n        residuals[axis] = difference(\r\n            new_top[axis],\r\n            bottom_lines[axis],\r\n            periods[axis]\r\n        )\r\n\r\n    report[\"Residuel_X_mm\"] = mm(\r\n        residuals[\"X\"]\r\n    )\r\n\r\n    report[\"Residuel_Y_mm\"] = mm(\r\n        residuals[\"Y\"]\r\n    )\r\n\r\n    if any(\r\n        abs(v) > TOL\r\n        for v in residuals.values()\r\n    ):\r\n        raise Exception(\r\n            \"Alignement non confirme\"\r\n        )\r\n\r\n    geometry_after = bbox(e)\r\n\r\n    if any(\r\n        abs(a-b) > 1e-7\r\n        for a, b in zip(\r\n            geometry_before,\r\n            geometry_after\r\n        )\r\n    ):\r\n        raise Exception(\r\n            \"Geometrie du plafond modifiee\"\r\n        )\r\n\r\n    report[\"Statut\"] = \"ALIGNE\"\r\n    return report\r\n\r\n# ==================================================\r\n# EXECUTION SUR LES PLAFONDS SELECTIONNES\r\n# ==================================================\r\n\r\nTransactionManager.Instance.ForceCloseTransaction()\r\n\r\nresults = []\r\n\r\nstats = {\r\n    \"TOTAL\": len(ceilings),\r\n    \"ALIGNES\": 0,\r\n    \"DEJA_ALIGNES\": 0,\r\n    \"A_ALIGNER\": 0,\r\n    \"ERREURS\": 0\r\n}\r\n\r\nfor ceiling in ceilings:\r\n    t = Transaction(\r\n        doc,\r\n        \"Aligner plafond \" + eid(ceiling)\r\n    )\r\n\r\n    started = False\r\n\r\n    try:\r\n        t.Start()\r\n        started = True\r\n\r\n        report = process(ceiling)\r\n\r\n        if EXECUTE:\r\n            t.Commit()\r\n        else:\r\n            t.RollBack()\r\n\r\n        started = False\r\n        results.append(report)\r\n\r\n        status = report[\"Statut\"]\r\n\r\n        if status == \"ALIGNE\":\r\n            stats[\"ALIGNES\"] += 1\r\n        elif status == \"DEJA_ALIGNE\":\r\n            stats[\"DEJA_ALIGNES\"] += 1\r\n        elif status == \"A_ALIGNER\":\r\n            stats[\"A_ALIGNER\"] += 1\r\n\r\n    except Exception as ex:\r\n        if started:\r\n            try:\r\n                t.RollBack()\r\n            except:\r\n                pass\r\n\r\n        stats[\"ERREURS\"] += 1\r\n\r\n        results.append({\r\n            \"Id\": eid(ceiling),\r\n            \"Statut\": \"ERREUR\",\r\n            \"Message\": str(ex)\r\n        })\r\n\r\n# ==================================================\r\n# RESULTAT DYNAMO\r\n# ==================================================\r\n\r\nOUT = {\r\n    \"MODE\": (\r\n        \"EXECUTION\" if EXECUTE\r\n        else \"DIAGNOSTIC\"\r\n    ),\r\n    \"TYPE_PLAFOND\": selected_type.Name,\r\n    \"NIVEAU\": selected_level.Name,\r\n    \"BILAN\": stats,\r\n    \"DETAILS\": results\r\n}\r\n",
+      "Engine": "PythonNet3",
+      "VariableInputPorts": true,
+      "Id": "9940de616ade4bc3995e4195d8985a39",
+      "NodeType": "PythonScriptNode",
+      "Inputs": [
+        {
+          "Id": "d7c6cca024104909bb1e052c809fb13b",
+          "Name": "IN[0]",
+          "Description": "Input #0",
+          "UsingDefaultValue": false,
+          "Level": 2,
+          "UseLevels": false,
+          "KeepListStructure": false
+        },
+        {
+          "Id": "7c80413689b546d89a1189baae352eca",
+          "Name": "IN[1]",
+          "Description": "Input #1",
+          "UsingDefaultValue": false,
+          "Level": 2,
+          "UseLevels": false,
+          "KeepListStructure": false
+        }
+      ],
+      "Outputs": [
+        {
+          "Id": "b69c9eec843a480caf7a642cbf1a1365",
+          "Name": "OUT",
+          "Description": "Result of the python script",
+          "UsingDefaultValue": false,
+          "Level": 2,
+          "UseLevels": false,
+          "KeepListStructure": false
+        }
+      ],
+      "Replication": "Disabled",
+      "Description": "Runs an embedded Python script."
+    },
+    {
+      "ConcreteType": "CoreNodeModels.Watch, CoreNodeModels",
+      "WatchWidth": 446.0,
+      "WatchHeight": 511.0,
+      "Id": "29d1e9c83e0a4bf2817d9ebe087d6685",
+      "NodeType": "ExtensionNode",
+      "Inputs": [
+        {
+          "Id": "dcec8bc7f69a48ffa2ddb8a82216fd8e",
+          "Name": "",
+          "Description": "Node to show output from",
+          "UsingDefaultValue": false,
+          "Level": 2,
+          "UseLevels": false,
+          "KeepListStructure": false
+        }
+      ],
+      "Outputs": [
+        {
+          "Id": "7eeac654de4d4a57bfcbd2b3aea7a5ab",
+          "Name": "",
+          "Description": "Node output",
+          "UsingDefaultValue": false,
+          "Level": 2,
+          "UseLevels": false,
+          "KeepListStructure": false
+        }
+      ],
+      "Replication": "Disabled",
+      "Description": "Visualizes a node's output"
+    },
+    {
+      "ConcreteType": "DSRevitNodesUI.CeilingTypes, DSRevitNodesUI",
+      "SelectedIndex": 1,
+      "SelectedString": "Plafond avec isolation",
+      "Id": "38c2e4ffe4e44d1abe0fdf1cda818eb7",
+      "NodeType": "ExtensionNode",
+      "Inputs": [],
+      "Outputs": [
+        {
+          "Id": "0e8ed3b76e9c418db970350081492378",
+          "Name": "Ceiling Type",
+          "Description": "The selected Ceiling Type",
+          "UsingDefaultValue": false,
+          "Level": 2,
+          "UseLevels": false,
+          "KeepListStructure": false
+        }
+      ],
+      "Replication": "Disabled",
+      "Description": "All ceiling types available in the document."
+    },
+    {
+      "ConcreteType": "DSRevitNodesUI.Levels, DSRevitNodesUI",
+      "SelectedIndex": 0,
+      "SelectedString": "00",
+      "Id": "81a89fde2fb8406698d4c00183f62f3e",
+      "NodeType": "ExtensionNode",
+      "Inputs": [],
+      "Outputs": [
+        {
+          "Id": "cb2bac4f651f4f68949f26f9c6879c6e",
+          "Name": "Levels",
+          "Description": "The selected Levels",
+          "UsingDefaultValue": false,
+          "Level": 2,
+          "UseLevels": false,
+          "KeepListStructure": false
+        }
+      ],
+      "Replication": "Disabled",
+      "Description": "Select a level in the active document"
+    }
+  ],
+  "Connectors": [
+    {
+      "Start": "b69c9eec843a480caf7a642cbf1a1365",
+      "End": "dcec8bc7f69a48ffa2ddb8a82216fd8e",
+      "Id": "c3ebdb3a52f2403c8eaa2d39b2308c11",
+      "IsHidden": "False"
+    },
+    {
+      "Start": "0e8ed3b76e9c418db970350081492378",
+      "End": "d7c6cca024104909bb1e052c809fb13b",
+      "Id": "533620bc773343fd9f0a372e7248857e",
+      "IsHidden": "False"
+    },
+    {
+      "Start": "cb2bac4f651f4f68949f26f9c6879c6e",
+      "End": "7c80413689b546d89a1189baae352eca",
+      "Id": "842ee853397448e0a994afae7c0b817d",
+      "IsHidden": "False"
+    }
+  ],
+  "Dependencies": [],
+  "NodeLibraryDependencies": [],
+  "EnableLegacyPolyCurveBehavior": true,
+  "Thumbnail": "",
+  "GraphDocumentationURL": null,
+  "ExtensionWorkspaceData": [
+    {
+      "ExtensionGuid": "28992e1d-abb9-417f-8b1b-05e053bee670",
+      "Name": "Propriétés",
+      "Version": "2.16",
+      "Data": {}
+    },
+    {
+      "ExtensionGuid": "DFBD9CC0-DB40-457A-939E-8C8555555A9D",
+      "Name": "Generative Design",
+      "Version": "3.0",
+      "Data": {}
+    }
+  ],
+  "Author": "",
+  "Linting": {
+    "activeLinter": "None",
+    "activeLinterId": "7b75fb44-43fd-4631-a878-29f4d5d8399a",
+    "warningCount": 0,
+    "errorCount": 0
+  },
+  "Bindings": [],
+  "View": {
+    "Dynamo": {
+      "ScaleFactor": 1.0,
+      "HasRunWithoutCrash": true,
+      "IsVisibleInDynamoLibrary": true,
+      "Version": "4.2.1.5887",
+      "RunType": "Manual",
+      "RunPeriod": "1000"
+    },
+    "Camera": {
+      "Name": "_Background Preview",
+      "EyeX": -8834.439453125,
+      "EyeY": 3935.7744140625,
+      "EyeZ": -1850.8621826171875,
+      "LookX": 3705.591796875,
+      "LookY": -4792.53076171875,
+      "LookZ": -640.7662353515625,
+      "UpX": 0.6267765164375305,
+      "UpY": 0.7716244459152222,
+      "UpZ": -0.10838300734758377
+    },
+    "ConnectorPins": [],
+    "NodeViews": [
+      {
+        "Id": "9940de616ade4bc3995e4195d8985a39",
+        "Name": "Python Script",
+        "IsSetAsInput": false,
+        "IsSetAsOutput": false,
+        "Excluded": false,
+        "ShowGeometry": true,
+        "X": 1722.038263204842,
+        "Y": 3928.702250355458
+      },
+      {
+        "Id": "29d1e9c83e0a4bf2817d9ebe087d6685",
+        "Name": "Watch",
+        "IsSetAsInput": false,
+        "IsSetAsOutput": false,
+        "Excluded": false,
+        "ShowGeometry": true,
+        "X": 1996.038263204842,
+        "Y": 3928.702250355458
+      },
+      {
+        "Id": "38c2e4ffe4e44d1abe0fdf1cda818eb7",
+        "Name": "Ceiling Types",
+        "IsSetAsInput": false,
+        "IsSetAsOutput": false,
+        "Excluded": false,
+        "ShowGeometry": true,
+        "X": 1323.038263204842,
+        "Y": 3871.702250355458
+      },
+      {
+        "Id": "81a89fde2fb8406698d4c00183f62f3e",
+        "Name": "Levels",
+        "IsSetAsInput": false,
+        "IsSetAsOutput": false,
+        "Excluded": false,
+        "ShowGeometry": true,
+        "X": 1323.038263204842,
+        "Y": 4019.7022503554585
+      }
+    ],
+    "Annotations": [],
+    "X": -1080.9094488826004,
+    "Y": -2295.6173586434375,
+    "Zoom": 0.7817157805020012
+  }
+}
