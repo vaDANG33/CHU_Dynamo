@@ -10,9 +10,7 @@ et similaires sont exclus de l'inventaire. Le noeud doit etre execute seul, en m
 import os
 import re
 import sys
-import json
 import types
-from collections import defaultdict
 from contextlib import contextmanager
 
 import clr
@@ -26,6 +24,7 @@ from System.Collections.Generic import HashSet, List
 
 MAX_PURGE_PASSES = 5
 BACKUP_RFA = re.compile(r"\.\d{4,}\.rfa$", re.IGNORECASE)
+MATERIAL_PREFIX = "CHU_"
 
 
 def absolute_path(value, input_name):
@@ -83,64 +82,8 @@ def get_rfa_files(root):
     return sorted(files)
 
 
-def element_name(doc, element, fallback=None):
-    """Lit le nom sans accepter silencieusement une chaine vide.
-
-    Pour les OwnerFamily de documents ouverts en arriere-plan, Name peut etre vide
-    dans Revit 2027. Le parametre systeme contient alors le nom de famille.
-    """
-    # Le Family ne renseigne pas toujours son propre nom dans un document de famille.
-    # Les FamilySymbol associes, eux, portent SYSTEM_FAMILY_NAME de facon fiable.
-    try:
-        for symbol_id in element.GetFamilySymbolIds():
-            symbol = doc.GetElement(symbol_id)
-            if symbol is None:
-                continue
-            parameter = symbol.get_Parameter(DB.BuiltInParameter.SYMBOL_FAMILY_NAME_PARAM)
-            if parameter is not None:
-                name = parameter.AsString() or parameter.AsValueString()
-                if name and str(name).strip():
-                    return str(name).strip()
-            name = str(symbol.FamilyName or "").strip()
-            if name:
-                return name
-    except Exception:
-        pass
-    parameter = element.get_Parameter(DB.BuiltInParameter.ALL_MODEL_FAMILY_NAME)
-    if parameter is not None:
-        name = parameter.AsString() or parameter.AsValueString()
-        if name and str(name).strip():
-            return str(name).strip()
-    name = str(element.Name or "").strip()
-    if name:
-        return name
-    if fallback and str(fallback).strip():
-        return str(fallback).strip()
-    raise RuntimeError("Nom de famille vide ou inaccessible (ElementId {})."
-                       .format(eid_value(element.Id)))
-
-
 def eid_value(element_id):
     return int(element_id.Value)
-
-
-def identity(doc, family, fallback_name=None):
-    """Identite securisee : nom, categorie, et caractere partage."""
-    category = family.FamilyCategory
-    shared_parameter = family.get_Parameter(DB.BuiltInParameter.FAMILY_SHARED)
-    is_shared = (shared_parameter is not None and
-                 shared_parameter.AsInteger() == 1)
-    return (
-        element_name(doc, family, fallback_name).casefold(),
-        eid_value(category.Id) if category else None,
-        is_shared,
-    )
-
-
-def nested_families(doc):
-    owner_id = eid_value(doc.OwnerFamily.Id)
-    return [family for family in DB.FilteredElementCollector(doc).OfClass(DB.Family)
-            if eid_value(family.Id) != owner_id and not family.IsInPlace]
 
 
 def parameter_signature(doc):
@@ -160,35 +103,29 @@ def assert_signature(doc, reference):
 
 
 def protected_ids(doc):
-    """La famille proprietaire ne doit jamais etre candidate a la suppression."""
-    return {eid_value(doc.OwnerFamily.Id)}
+    """Famille proprietaire, materiaux CHU_ et leurs assets : jamais candidats a la purge."""
+    protected = {eid_value(doc.OwnerFamily.Id)}
+    for material in DB.FilteredElementCollector(doc).OfClass(DB.Material):
+        if not str(material.Name).startswith(MATERIAL_PREFIX):
+            continue
+        protected.add(eid_value(material.Id))
+        for asset_id in (material.AppearanceAssetId, material.StructuralAssetId,
+                         material.ThermalAssetId):
+            if asset_id != DB.ElementId.InvalidElementId:
+                protected.add(eid_value(asset_id))
+    return protected
 
 
 def dotnet_types():
-    """Construit une fois les implementations d'interfaces PythonNet3."""
-    key = "fam_optimiser_revit2027_interfaces_v1"
+    """Construit une fois le FailureHandler PythonNet3."""
+    # Nouvelle cle : un module deja en cache renverrait l'ancien tuple a deux valeurs.
+    key = "fam_purge_revit2027_failure_handler_v1"
     if key in sys.modules:
-        module = sys.modules[key]
-        return module.LoadOptions, module.FailureHandler
-
-    class LoadOptions(DB.IFamilyLoadOptions):
-        # Une interface PythonNet3 doit avoir un namespace CLR unique et stable.
-        __namespace__ = "FAM.OptimiserRevit2027.v1"
-
-        def __init__(self):
-            super().__init__()
-
-        def OnFamilyFound(self, familyInUse, overwriteParameterValues):
-            # Conserve les valeurs des types de l'hote.
-            return (True, False)
-
-        def OnSharedFamilyFound(self, sharedFamily, familyInUse, source,
-                                overwriteParameterValues):
-            # Prend la definition de la bibliotheque, sans ecraser les valeurs hote.
-            return (True, DB.FamilySource.Family, False)
+        return sys.modules[key].FailureHandler
 
     class FailureHandler(DB.IFailuresPreprocessor):
-        __namespace__ = "FAM.OptimiserRevit2027.v1"
+        # Une interface PythonNet3 doit avoir un namespace CLR unique et stable.
+        __namespace__ = "FAM.PurgeRevit2027.v1"
 
         def __init__(self):
             super().__init__()
@@ -206,10 +143,9 @@ def dotnet_types():
                     else DB.FailureProcessingResult.Continue)
 
     module = types.ModuleType(key)
-    module.LoadOptions = LoadOptions
     module.FailureHandler = FailureHandler
     sys.modules[key] = module
-    return LoadOptions, FailureHandler
+    return FailureHandler
 
 
 @contextmanager
@@ -259,6 +195,26 @@ def in_transaction(doc, name, handler_type, warnings, operation):
         if transaction.GetStatus() == DB.TransactionStatus.Started:
             transaction.RollBack()
         transaction.Dispose()
+
+
+def delete_foreign_materials(doc, handler_type, warnings):
+    """Supprime les materiaux hors CHU_ un par un : Revit peut en refuser certains."""
+    report = {"conserves": 0, "supprimes": [], "refuses": []}
+    for material in list(DB.FilteredElementCollector(doc).OfClass(DB.Material)):
+        if not material.IsValidObject:
+            continue
+        name = str(material.Name)
+        if name.startswith(MATERIAL_PREFIX):
+            report["conserves"] += 1
+            continue
+        material_id = material.Id
+        try:
+            in_transaction(doc, "FAM - Suppression materiau", handler_type, warnings,
+                           lambda: doc.Delete(material_id))
+            report["supprimes"].append(name)
+        except Exception as error:
+            report["refuses"].append({"materiau": name, "erreur": str(error)})
+    return report
 
 
 def purge_conservatively(doc, handler_type, warnings):
@@ -329,7 +285,7 @@ def main():
     if any(document.IsModifiable for document in app.Documents):
         raise RuntimeError("Une transaction est deja ouverte. Executer ce noeud seul.")
 
-    LoadOptions, FailureHandler = dotnet_types()
+    FailureHandler = dotnet_types()
     closing_errors = []
     report = {
         "noeud": "FAM_PurgerCompacterFermer_Revit2027",
@@ -347,6 +303,8 @@ def main():
             item["taille_avant"] = os.path.getsize(path)
             with open_owned_family(app, path, closing_errors) as doc:
                 baseline = parameter_signature(doc)
+                item["materiaux"] = delete_foreign_materials(
+                    doc, FailureHandler, item["avertissements"])
                 item["purge"] = purge_conservatively(doc, FailureHandler,
                                                        item["avertissements"])
                 if not item["purge"]["stabilise"]:
