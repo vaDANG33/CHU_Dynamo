@@ -2,6 +2,8 @@
 """FAM_PurgerCompacterFermer_Revit2027 -- noeud PythonNet3 Dynamo.
 
 IN[0] : Directory Path, dossier des familles (*.rfa, recherche recursive).
+IN[1] : Boolean facultatif. True autorise la suppression des types inutilises.
+IN[2] : Boolean facultatif. True tente de supprimer tous les types de la famille.
 
 Chaque fichier du dossier est purge, enregistre en compact, puis ferme.
 Les sauvegardes Revit sont conservees (MaximumBackups = 1). Les fichiers .0001.rfa
@@ -102,9 +104,14 @@ def assert_signature(doc, reference):
         raise RuntimeError("Parametres ou formules modifies par la purge.")
 
 
-def protected_ids(doc):
-    """Famille proprietaire, materiaux CHU_ et leurs assets : jamais candidats a la purge."""
+def protected_ids(doc, delete_unused_types):
+    """Protege la famille proprietaire, les materiaux CHU_ et, par defaut, les types."""
     protected = {eid_value(doc.OwnerFamily.Id)}
+    if not delete_unused_types:
+        protected.update(
+            eid_value(symbol.Id) for symbol in
+            DB.FilteredElementCollector(doc).OfClass(DB.FamilySymbol)
+        )
     for material in DB.FilteredElementCollector(doc).OfClass(DB.Material):
         if not str(material.Name).startswith(MATERIAL_PREFIX):
             continue
@@ -217,12 +224,47 @@ def delete_foreign_materials(doc, handler_type, warnings):
     return report
 
 
-def purge_conservatively(doc, handler_type, warnings):
+def delete_all_owner_types(doc, handler_type, warnings):
+    """Mode extreme : supprime chaque type appartenant a la famille ouverte.
+
+    Revit peut refuser la suppression du dernier type. Chaque type est donc traite
+    dans sa propre transaction afin que les suppressions deja acceptees soient
+    conservees et que les refus soient rapportes sans bloquer le fichier.
+    """
+    owner_id = eid_value(doc.OwnerFamily.Id)
+    types = []
+    for symbol in DB.FilteredElementCollector(doc).OfClass(DB.FamilySymbol):
+        try:
+            if eid_value(symbol.Family.Id) == owner_id:
+                types.append((symbol.Id, str(symbol.Name)))
+        except Exception:
+            continue
+
+    report = {"demandes": len(types), "supprimes": [], "refuses": []}
+    for symbol_id, name in types:
+        try:
+            def delete_type():
+                return list(doc.Delete(symbol_id))
+            deleted = in_transaction(doc, "FAM - Suppression forcee type",
+                                     handler_type, warnings, delete_type)
+            if eid_value(symbol_id) in {eid_value(item) for item in deleted}:
+                report["supprimes"].append(name)
+            else:
+                report["refuses"].append({
+                    "type": name,
+                    "erreur": "Revit n'a pas confirme la suppression"
+                })
+        except Exception as error:
+            report["refuses"].append({"type": name, "erreur": str(error)})
+    return report
+
+
+def purge_conservatively(doc, handler_type, warnings, delete_unused_types=False):
     """Purge iterative des seuls elements que Revit declare inutilises."""
     if not hasattr(doc, "GetUnusedElements"):
         raise RuntimeError("Document.GetUnusedElements est indisponible dans cette version Revit.")
     signature = parameter_signature(doc)
-    protected = protected_ids(doc)
+    protected = protected_ids(doc, delete_unused_types)
     deleted_total = 0
 
     for pass_number in range(1, MAX_PURGE_PASSES + 1):
@@ -275,6 +317,8 @@ def compact_save(doc, path):
 def main():
     root = absolute_path(IN[0] if len(IN) > 0 else None,
                          "IN[0] - dossier de familles")
+    delete_unused_types = bool(IN[1]) if len(IN) > 1 and IN[1] is not None else False
+    delete_all_types = bool(IN[2]) if len(IN) > 2 and IN[2] is not None else False
     if not os.path.isdir(root):
         raise ValueError("Le dossier de familles est introuvable.")
 
@@ -291,6 +335,8 @@ def main():
         "noeud": "FAM_PurgerCompacterFermer_Revit2027",
         "revit": str(app.VersionNumber),
         "dossier": root,
+        "supprimer_types_inutilises": delete_unused_types,
+        "supprimer_tous_types": delete_all_types,
         "fichiers": [],
         "erreurs_fermeture": closing_errors,
         "erreurs_globales": [],
@@ -305,8 +351,12 @@ def main():
                 baseline = parameter_signature(doc)
                 item["materiaux"] = delete_foreign_materials(
                     doc, FailureHandler, item["avertissements"])
-                item["purge"] = purge_conservatively(doc, FailureHandler,
-                                                       item["avertissements"])
+                if delete_all_types:
+                    item["types_forces"] = delete_all_owner_types(
+                        doc, FailureHandler, item["avertissements"])
+                item["purge"] = purge_conservatively(
+                    doc, FailureHandler, item["avertissements"],
+                    delete_unused_types or delete_all_types)
                 if not item["purge"]["stabilise"]:
                     raise RuntimeError("Purge non stabilisee apres {} passes."
                                        .format(MAX_PURGE_PASSES))
